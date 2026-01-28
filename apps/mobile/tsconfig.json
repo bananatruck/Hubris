@@ -1,0 +1,33 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "strict": true,
+    "jsx": "react-native",
+    "lib": [
+      "ES2022"
+    ],
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@hubris/types": [
+        "../../packages/types/src"
+      ],
+      "@hubris/core": [
+        "../../packages/core/src"
+      ]
+    },
+    "baseUrl": "."
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
