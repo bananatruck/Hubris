@@ -56,29 +56,25 @@ export interface ImportanceMeta {
   weightSummary: string;
 }
 
-export const IMPORTANCE_OPTIONS: readonly ImportanceMeta[] = [
-  {
-    id: 'high',
-    label: 'High',
-    weight: PRIORITY_WEIGHTS.high,
-    weightPercent: Math.round(PRIORITY_WEIGHTS.high * 100),
-    weightSummary: 'High counts 40%',
-  },
-  {
-    id: 'medium',
-    label: 'Medium',
-    weight: PRIORITY_WEIGHTS.medium,
-    weightPercent: Math.round(PRIORITY_WEIGHTS.medium * 100),
-    weightSummary: 'Medium counts 35%',
-  },
-  {
-    id: 'low',
-    label: 'Low',
-    weight: PRIORITY_WEIGHTS.low,
-    weightPercent: Math.round(PRIORITY_WEIGHTS.low * 100),
-    weightSummary: 'Low counts 25%',
-  },
+const importanceRows = [
+  { id: 'high' as const, label: 'High' },
+  { id: 'medium' as const, label: 'Medium' },
+  { id: 'low' as const, label: 'Low' },
 ] as const;
+
+export const IMPORTANCE_OPTIONS: readonly ImportanceMeta[] = importanceRows.map(
+  ({ id, label }) => {
+    const weight = PRIORITY_WEIGHTS[id];
+    const weightPercent = Math.round(weight * 100);
+    return {
+      id,
+      label,
+      weight,
+      weightPercent,
+      weightSummary: `${label} counts ${weightPercent}%`,
+    };
+  },
+);
 
 export const IMPORTANCE_BY_ID: Readonly<Record<Importance, ImportanceMeta>> = {
   high: IMPORTANCE_OPTIONS[0],
