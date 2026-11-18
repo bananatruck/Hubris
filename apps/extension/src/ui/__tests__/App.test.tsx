@@ -70,9 +70,11 @@ describe('Hubris UI', () => {
     const logButton = await screen.findByRole('button', {
       name: 'Log Leetcode, 0 of 5 this week',
     });
+    expect(screen.getByRole('img', { name: /Overall weekly score 0,/ })).toBeTruthy();
     fireEvent.click(logButton);
 
     await screen.findByText('Leetcode logged');
+    await screen.findByRole('img', { name: /Overall weekly score 4,/ });
     await screen.findByRole('button', {
       name: 'Log Leetcode, 1 of 5 this week',
     });
@@ -86,6 +88,7 @@ describe('Hubris UI', () => {
     await screen.findByRole('button', {
       name: 'Log Leetcode, 0 of 5 this week',
     });
+    expect(screen.getByRole('img', { name: /Overall weekly score 0,/ })).toBeTruthy();
   });
 
   it('keeps an open draft mounted and shows a retry alert when refresh fails', async () => {
