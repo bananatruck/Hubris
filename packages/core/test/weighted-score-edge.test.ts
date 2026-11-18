@@ -48,7 +48,7 @@ describe('weekly scoring boundaries', () => {
     });
 
     it('counts exact week endpoints and excludes unknown and archived activity logs', () => {
-        const reference = new Date(2026, 10, 22, 23);
+        const reference = new Date(2026, 10, 22, 23, 59, 59, 999);
         const { start, end } = getWeekBounds(reference);
         const active: TrackedActivity = {
             id: 'a', name: 'A', category: 'career', timesPerWeek: 4,
@@ -87,6 +87,37 @@ describe('weekly scoring boundaries', () => {
         expect(report.categories.career.activities.map((row) => row.activityId)).toEqual(['existing']);
         expect(computeWeeklyTrend(activities, logs, reference, 2).map((point) => point.categories.career))
             .toEqual([100, 0]);
+    });
+
+    it('counts logs through now inclusively and ignores future logs this week', () => {
+        const reference = new Date(2026, 10, 18, 15);
+        const activity: TrackedActivity = {
+            id: 'a', name: 'A', category: 'career', timesPerWeek: 2,
+            importance: 'high', archived: false,
+            createdAt: new Date(2026, 0, 1).toISOString(), updatedAt: reference.toISOString(),
+        };
+        const logs = [
+            { id: 'now', activityId: 'a', loggedAt: reference.toISOString() },
+            { id: 'future', activityId: 'a', loggedAt: new Date(reference.getTime() + 1).toISOString() },
+        ];
+        expect(computeWeeklyReport([activity], logs, reference).categories.career.activities[0].done).toBe(1);
+    });
+
+    it('keeps completed past weeks in the trend and cuts only the current week at now', () => {
+        const reference = new Date(2026, 10, 18, 15);
+        const activity: TrackedActivity = {
+            id: 'a', name: 'A', category: 'career', timesPerWeek: 1,
+            importance: 'high', archived: false,
+            createdAt: new Date(2026, 0, 1).toISOString(), updatedAt: reference.toISOString(),
+        };
+        const logs = [
+            { id: 'past', activityId: 'a', loggedAt: new Date(2026, 10, 15, 23, 59, 59, 999).toISOString() },
+            { id: 'future', activityId: 'a', loggedAt: new Date(2026, 10, 22, 9).toISOString() },
+        ];
+        expect(computeWeeklyTrend([activity], logs, reference, 2).map((point) => point.categories.career))
+            .toEqual([100, 0]);
+        const pastReport = computeWeeklyReport([activity], logs, new Date(2026, 10, 9), reference);
+        expect(pastReport.categories.career.score).toBe(100);
     });
 
     it('steps back from a Sunday across DST without skipping or duplicating weeks', () => {
