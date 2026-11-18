@@ -71,6 +71,24 @@ describe('weekly scoring boundaries', () => {
         expect(report.overall).toBe(18);
     });
 
+    it('keeps last week complete when another High activity is created this week', () => {
+        const reference = new Date(2026, 10, 18, 15);
+        const existing: TrackedActivity = {
+            id: 'existing', name: 'Existing', category: 'career', timesPerWeek: 1,
+            importance: 'high', archived: false,
+            createdAt: new Date(2026, 0, 1).toISOString(), updatedAt: reference.toISOString(),
+        };
+        const activities = [existing, {
+            ...existing, id: 'new', name: 'New', createdAt: reference.toISOString(),
+        }];
+        const logs = [{ id: 'done', activityId: 'existing', loggedAt: new Date(2026, 10, 10, 9).toISOString() }];
+        const report = computeWeeklyReport(activities, logs, new Date(2026, 10, 15, 23, 59, 59, 999));
+        expect(report.categories.career.score).toBe(100);
+        expect(report.categories.career.activities.map((row) => row.activityId)).toEqual(['existing']);
+        expect(computeWeeklyTrend(activities, logs, reference, 2).map((point) => point.categories.career))
+            .toEqual([100, 0]);
+    });
+
     it('steps back from a Sunday across DST without skipping or duplicating weeks', () => {
         const reference = new Date(2026, 10, 8, 23, 30);
         const original = reference.getTime();

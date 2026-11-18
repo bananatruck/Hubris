@@ -117,7 +117,9 @@ export function computeWeeklyReport(
     }
     function reportFor(category: ScoredCategory): CategoryReport {
         const rows = activities
-            .filter((activity) => !activity.archived && activity.category === category)
+            .filter((activity) => !activity.archived
+                && activity.category === category
+                && new Date(activity.createdAt) <= end)
             .map((activity) => {
                 const done = counts.get(activity.id) ?? 0;
                 return {

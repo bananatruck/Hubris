@@ -44,6 +44,7 @@ Each decision below is one named constant or function in `packages/core/src/weig
 6. One log entry counts as one time done.
 7. Archived activities are left out of the score; their logs are kept.
 8. Scores keep full precision in `packages/core`; the UI rounds to whole numbers only for display.
+9. An activity counts from the week it was created; goal, importance and category edits apply to every week because the app keeps no revision history.
 
 ## Worked examples (each one is a unit test in `packages/core`)
 
