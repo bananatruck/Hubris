@@ -23,7 +23,7 @@ Hubris compares what you meant to do this week with what you did, and turns it i
 
 ## Load the extension in Chrome
 
-From a zip (attached to a GitHub release, or built locally with `pnpm package`, or downloaded from a CI run's artifacts):
+From a zip (attached to a GitHub release, downloaded from a CI run's artifacts, or built locally from the repo root with `pnpm turbo run build --filter=@hubris/extension...` and then `pnpm --filter=@hubris/extension package`, which needs the `zip` command):
 
 1. Unzip `hubris-extension-<version>.zip` into a folder.
 2. Open `chrome://extensions` and switch on **Developer mode** (top right).
@@ -102,7 +102,7 @@ Extension-only commands, run inside `apps/extension`:
 ```bash
 pnpm build     # production build into dist/
 pnpm e2e       # loads dist/ in Playwright's Chromium, checks for errors and accessibility, saves screenshots
-pnpm package   # zips dist/ into release/hubris-extension-<version>.zip
+pnpm package   # zips an existing dist/ into release/hubris-extension-<version>.zip (needs the zip command)
 ```
 
 ## Project Structure
