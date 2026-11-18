@@ -95,17 +95,22 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
 
   const handleLogged = useCallback(
     (activityName: string, log: ActivityLog) => {
-      notify({
+      const toastId = crypto.randomUUID();
+      setToast({
+        id: toastId,
         tone: 'info',
         message: `${activityName} logged`,
         onUndo: () => {
           void actions.undoLog(log).catch(() => {
-            notify({ message: 'Could not undo. The log is still there.', tone: 'error' });
+            const message = 'Could not undo. The log is still there.';
+            setToast((current) => current && current.id !== toastId
+              ? { ...current, errorMessage: message }
+              : { id: crypto.randomUUID(), message, tone: 'error' });
           });
         },
       });
     },
-    [actions, notify],
+    [actions],
   );
 
   const dismissToast = useCallback(() => {

@@ -97,6 +97,37 @@ it('reports undo failure without offering another undo', async () => {
   expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
 });
 
+it('keeps a newer log Undo available when an older Undo fails', async () => {
+  let rejectUndo: (reason: unknown) => void = () => {};
+  const undoLog = vi.fn<HubrisState['actions']['undoLog']>(() => new Promise((_, reject) => {
+    rejectUndo = reject;
+  }));
+  const reading = { ...activity, id: 'b', name: 'Reading' };
+  const practiceLog = { ...log, id: 'practice-log' };
+  const readingLog = { ...log, id: 'reading-log', activityId: reading.id };
+  const logActivity = vi.fn<HubrisState['actions']['logActivity']>()
+    .mockResolvedValueOnce(practiceLog)
+    .mockResolvedValueOnce(readingLog);
+  setup(
+    {
+      activities: [activity, reading],
+      report: computeWeeklyReport([activity, reading], [log], now),
+    },
+    { logActivity, undoLog },
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: /Log Practice/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Undo' }));
+  fireEvent.click(screen.getByRole('button', { name: /Log Reading/ }));
+  await screen.findByText('Reading logged');
+
+  rejectUndo(new ValidationError('Storage is full.'));
+
+  expect(await screen.findByText('Could not undo. The log is still there.')).toBeTruthy();
+  expect(screen.getByText('Reading logged')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Undo' })).toBeTruthy();
+});
+
 it.each(['activity', 'log', 'erase'] as const)('keeps the %s dialog open while pending and on failure, then closes on success', async (kind) => {
   let rejectWrite: (reason: unknown) => void = () => {};
   const pending = vi.fn<() => Promise<void>>().mockImplementationOnce(() => new Promise((_, reject) => { rejectWrite = reject; })).mockResolvedValue(undefined);
