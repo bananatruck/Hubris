@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "types": ["chrome", "vite/client", "node"],
+    "paths": {
+      "@hubris/core": ["../../packages/core/src/index.ts"],
+      "@hubris/types": ["../../packages/types/src/index.ts"]
+    }
+  },
+  "include": ["src", "*.ts"],
+  "exclude": ["dist", "release", "node_modules"]
+}
