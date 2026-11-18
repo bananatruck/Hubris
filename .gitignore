@@ -34,3 +34,12 @@ coverage/
 
 # Turbo
 .turbo/
+
+# Personal planning notes that stay local (never commit)
+/1 The score per category.txt
+*.local.txt
+
+# Extension test and screenshot tooling output
+test-results/
+playwright-report/
+apps/extension/.e2e-profile/
