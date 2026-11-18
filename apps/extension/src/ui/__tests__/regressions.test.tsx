@@ -163,3 +163,22 @@ describe('segmented radio keyboard', () => {
     }
   });
 });
+
+
+it.each(['Start blank', 'Start with an example'])('locks earlier onboarding steps after committing %s', async (choice) => {
+  const actions = setup({ onboardingComplete: false });
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  // Earlier steps remain available before committing a starter choice.
+  const intro = screen.getByRole('button', { name: 'Step 1: How it works' });
+  expect(intro).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: new RegExp(choice) }));
+  await screen.findByText('Add a weekly activity');
+  const starter = screen.getByRole('button', { name: 'Step 2: Choose start' });
+  expect(intro).toBeDisabled();
+  expect(starter).toBeDisabled();
+  fireEvent.click(starter);
+  fireEvent.click(intro);
+  expect(screen.getByText('Add a weekly activity')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /Back/ })).toBeNull();
+  expect(actions.completeOnboarding).toHaveBeenCalledTimes(1);
+});
