@@ -7,6 +7,7 @@ import { HubrisContext, type HubrisState } from '../../state/useHubris';
 import { ValidationError } from '../../storage/validation';
 import { App } from '../App';
 import { SegmentedControl } from '../components/21st/segmented-control';
+import { CATEGORIES } from '../lib/categories';
 import { TrendsScreen } from '../screens/TrendsScreen';
 
 const now = new Date(2026, 10, 18, 12);
@@ -239,6 +240,20 @@ it('reads the active heatmap day from the latest heatmap data', () => {
 
   fireEvent.click(screen.getByRole('button', { name: 'Remove active day' }));
   expect(screen.getByText('Hover or focus a day')).toBeTruthy();
+});
+
+it('uses category metadata weights for trend bar contributions', () => {
+  const career = CATEGORIES.find((category) => category.id === 'career');
+  if (!career) throw new Error('Missing Career category metadata');
+  const originalWeight = career.weight;
+  Object.defineProperty(career, 'weight', { configurable: true, value: 0.5 });
+  try {
+    setup();
+    fireEvent.click(screen.getByRole('tab', { name: 'Trends' }));
+    expect(screen.getByRole('img', { name: /Career contribution 17/ })).toBeTruthy();
+  } finally {
+    Object.defineProperty(career, 'weight', { configurable: true, value: originalWeight });
+  }
 });
 
 it('resets the file input so the same backup can be chosen again', async () => {

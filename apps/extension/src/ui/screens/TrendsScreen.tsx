@@ -156,12 +156,15 @@ export function TrendsScreen() {
             {trend.map((point, index) => {
               const isCurrent = index === trend.length - 1;
               const rangeLabel = formatWeekRange(point.weekStart, point.weekEnd);
-              const careerContrib = (point.categories.career ?? 0) * 0.36;
-              const healthContrib = (point.categories.health ?? 0) * 0.36;
-              const hobbiesContrib = (point.categories['hobbies-habits'] ?? 0) * 0.28;
+              const contributions = CATEGORIES.map((category) => ({
+                category,
+                value: (point.categories[category.id] ?? 0) * category.weight,
+              }));
               const overallRounded = Math.round(point.overall);
 
-              const barAria = `${rangeLabel}${isCurrent ? ' (current week)' : ''}: overall score ${overallRounded}, Career contribution ${Math.round(careerContrib)}, Health contribution ${Math.round(healthContrib)}, Hobbies contribution ${Math.round(hobbiesContrib)}`;
+              const barAria = `${rangeLabel}${isCurrent ? ' (current week)' : ''}: overall score ${overallRounded}, ${contributions
+                .map(({ category, value }) => `${category.label} contribution ${Math.round(value)}`)
+                .join(', ')}`;
 
               return (
                 <div
@@ -187,24 +190,15 @@ export function TrendsScreen() {
                     }
                     style={{ height: '100%' }}
                   >
-                    <div
-                      style={{
-                        height: `${Math.max(0, Math.min(100, careerContrib))}%`,
-                        backgroundColor: 'var(--color-career)',
-                      }}
-                    />
-                    <div
-                      style={{
-                        height: `${Math.max(0, Math.min(100, healthContrib))}%`,
-                        backgroundColor: 'var(--color-health)',
-                      }}
-                    />
-                    <div
-                      style={{
-                        height: `${Math.max(0, Math.min(100, hobbiesContrib))}%`,
-                        backgroundColor: 'var(--color-hobbies)',
-                      }}
-                    />
+                    {contributions.map(({ category, value }) => (
+                      <div
+                        key={category.id}
+                        style={{
+                          height: `${Math.max(0, Math.min(100, value))}%`,
+                          backgroundColor: category.tokenVar,
+                        }}
+                      />
+                    ))}
                   </div>
                 </div>
               );
