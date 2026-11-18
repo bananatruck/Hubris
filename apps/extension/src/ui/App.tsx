@@ -211,7 +211,7 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
             className="flex flex-1 flex-col min-h-0"
           >
             <main className="flex-1 overflow-y-auto px-3.5 py-3 pb-20">
-              <TabsContent value="today" className="focus:outline-none">
+              <TabsContent value="today" className="rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:ring-offset-2 focus-visible:ring-offset-ink">
                 {isWideSidePanel ? (
                   <div className="grid grid-cols-2 gap-5 items-start">
                     <TodayScreen onLogged={handleLogged} />
@@ -222,7 +222,7 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
                 )}
               </TabsContent>
 
-              <TabsContent value="trends" className="focus:outline-none">
+              <TabsContent value="trends" className="rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:ring-offset-2 focus-visible:ring-offset-ink">
                 {isWideSidePanel ? (
                   <div className="grid grid-cols-2 gap-5 items-start">
                     <TodayScreen onLogged={handleLogged} />
@@ -233,11 +233,11 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
                 )}
               </TabsContent>
 
-              <TabsContent value="history" className="focus:outline-none">
+              <TabsContent value="history" className="rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:ring-offset-2 focus-visible:ring-offset-ink">
                 <HistoryScreen />
               </TabsContent>
 
-              <TabsContent value="settings" className="focus:outline-none">
+              <TabsContent value="settings" className="rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:ring-offset-2 focus-visible:ring-offset-ink">
                 <SettingsScreen />
               </TabsContent>
             </main>

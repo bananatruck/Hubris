@@ -190,7 +190,25 @@ try {
     assert.equal(serious.length, 0, serious.join('\n'));
   });
 
-  await step(7, 'toolbar badge', async () => {
+  await step(7, 'keyboard focus is visible on the tab panel', async () => {
+    await selectTab(popup, 'Today');
+    await popup.getByRole('tab', { name: 'Today', exact: true }).focus();
+    let reachedPanel = false;
+    for (let presses = 0; presses < 60 && !reachedPanel; presses += 1) {
+      await popup.keyboard.press('Shift+Tab');
+      reachedPanel = await popup.evaluate(() => document.activeElement?.getAttribute('role') === 'tabpanel');
+    }
+    assert(reachedPanel, 'Keyboard focus never reached the tab panel');
+    const style = await popup.evaluate(() => {
+      const panel = document.activeElement;
+      const computed = getComputedStyle(panel);
+      return { boxShadow: computed.boxShadow, outlineStyle: computed.outlineStyle, outlineWidth: computed.outlineWidth };
+    });
+    const hasRing = style.boxShadow !== 'none' || (style.outlineStyle !== 'none' && style.outlineWidth !== '0px');
+    assert(hasRing, `Focused tab panel has no visible indicator: ${JSON.stringify(style)}`);
+  });
+
+  await step(8, 'toolbar badge', async () => {
     const badge = await worker.evaluate(() => chrome.action.getBadgeText({}));
     assert(/^(?:100|[1-9]?\d)$/.test(badge), `Expected badge integer 0 to 100, got ${JSON.stringify(badge)}`);
   });
