@@ -1,4 +1,4 @@
-import { useId, useState, type ChangeEvent } from 'react';
+import { useId, useRef, useState, type ChangeEvent } from 'react';
 import { Archive, ArchiveRestore, Download, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import type { TrackedActivity } from '@hubris/types';
 import { useHubris } from '../../state/useHubris';
@@ -20,6 +20,8 @@ const IMPORT_MODE_OPTIONS: readonly SegmentedOption<'replace' | 'merge'>[] = [
 
 export function SettingsScreen() {
   const uid = useId();
+  const addButton = useRef<HTMLButtonElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const notify = useNotify();
   const deletion = useDialogAction();
   const erasure = useDialogAction();
@@ -60,6 +62,7 @@ export function SettingsScreen() {
         `Imported ${counts.activities} ${counts.activities === 1 ? 'activity' : 'activities'} and ${counts.logs} ${counts.logs === 1 ? 'log' : 'logs'}.`,
       );
       setSelectedFile(null);
+      fileInput.current?.focus();
     } catch (error) {
       const message = errorMessage(error);
       setImportErrors(message.split('\n').filter((line) => line.trim().length > 0));
@@ -96,7 +99,7 @@ export function SettingsScreen() {
           <h2 className="font-display text-base font-semibold text-text">
             Manage activities
           </h2>
-          <Button variant="secondary" size="sm" onClick={() => setAddOpen(true)}>
+          <Button ref={addButton} variant="secondary" size="sm" onClick={() => setAddOpen(true)}>
             <Plus className="h-3.5 w-3.5" aria-hidden="true" />
             Add activity
           </Button>
@@ -231,6 +234,7 @@ export function SettingsScreen() {
                 <span>{selectedFile ? selectedFile.name : 'Choose backup JSON file'}</span>
               </label>
               <input
+                ref={fileInput}
                 id={fileInputId}
                 aria-label="Import backup file"
                 type="file"
@@ -246,11 +250,16 @@ export function SettingsScreen() {
                   Confirm importing <strong className="font-semibold">{selectedFile.name}</strong> in{' '}
                   <strong className="font-semibold">{importMode}</strong> mode?
                 </p>
+                {importMode === 'merge' && (
+                  <p className="text-xs text-muted">
+                    Merge adds everything in the file that is missing here, including items you deleted after this backup was made.
+                  </p>
+                )}
                 <div className="flex justify-end gap-2">
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={() => setSelectedFile(null)}
+                    onClick={() => { setSelectedFile(null); fileInput.current?.focus(); }}
                   >
                     Cancel
                   </Button>
@@ -324,6 +333,7 @@ export function SettingsScreen() {
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent
+          returnFocusFallback={() => addButton.current}
           title="Add activity"
           description="Create a new weekly activity."
         >
@@ -343,6 +353,7 @@ export function SettingsScreen() {
         }}
       >
         <DialogContent
+          returnFocusFallback={() => addButton.current}
           title="Edit activity"
           description="Update the activity details and weekly target."
         >
@@ -370,6 +381,7 @@ export function SettingsScreen() {
         }}
       >
         <DialogContent
+          returnFocusFallback={() => addButton.current}
           title="Delete activity"
           description="Deleting this activity will also delete all of its logs."
         >
@@ -399,6 +411,7 @@ export function SettingsScreen() {
         }}
       >
         <DialogContent
+          returnFocusFallback={() => addButton.current}
           title="Erase all data"
           description="Permanently delete all local activities and logs."
         >

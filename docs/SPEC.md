@@ -44,6 +44,10 @@ Each decision below is one named constant or function in `packages/core/src/weig
 6. One log entry counts as one time done.
 7. Archived activities are left out of the score; their logs are kept.
 8. Scores keep full precision in `packages/core`; the UI rounds to whole numbers only for display.
+9. An activity counts from the week it was created; goal, importance and category edits apply to every week because the app keeps no revision history.
+10. Count logs from the week start through the earlier of the week end and the as-of cutoff, inclusive.
+    The cutoff defaults to the reference date.
+    Trends use their reference date as the cutoff for every week so past weeks stay complete.
 
 ## Worked examples (each one is a unit test in `packages/core`)
 
@@ -79,13 +83,23 @@ With Career and Hobbies from Example B and no Health activities, the overall sco
 ## Modules
 
 `packages/core/src/weighted-score.ts` holds the weights, the policies, and these pure functions: `activityScore`, `categoryScore`, `overallScore`, `computeWeeklyReport`, and `computeWeeklyTrend`.
-`computeWeeklyReport(activities, logs, referenceDate)` returns the week bounds, the overall score, and per category the score (or `null` when empty) and one row per activity with goal, done, and score.
+`computeWeeklyReport(activities, logs, referenceDate = new Date(), asOf = referenceDate)` returns the week bounds, the overall score, and per category the score (or `null` when empty) and one row per activity with goal, done, and score.
 `computeWeeklyTrend(activities, logs, referenceDate, weeks = 8)` returns one weekly report summary per week, oldest first, ending with the current week.
 `apps/extension/public/manifest.json` declares a popup, a side panel, and a module service worker, with only the `sidePanel` and `alarms` permissions and no host permissions.
 `apps/extension/src/storage/` holds the IndexedDB repository (activities and logs stores) and the JSON import and export with schema validation.
 `apps/extension/src/background/` holds the service worker, which keeps the toolbar badge showing this week's overall score.
 `apps/extension/src/state/` holds the React hook that the UI uses to read data and run actions.
 `apps/extension/src/ui/` holds the screens and components for the popup and the side panel.
+
+## Suggestions
+
+`generateWeeklySuggestions` uses the weekly report's done counts and excludes archived activities, activities not yet created, and future logs.
+An activity is at risk when its remaining sessions exceed the ceiling of fractional days until Sunday ends, using the same pace helper as the existing engine.
+At most two at-risk suggestions are selected by lowest score, with priority `10 - floor(score / 10)`.
+One unsuggested activity with a goal of seven per week, an unmet goal, and no log today gets a streak protector at priority 8.
+If nothing at all was logged today, the lowest-scoring unsuggested activity below 50 gets a light-day suggestion at priority 5.
+Today means the local calendar day, and only logs through now count.
+Suggestions use quick-log actions and return at most three items, highest priority first.
 
 ## Test plan
 

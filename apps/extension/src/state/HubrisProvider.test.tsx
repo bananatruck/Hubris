@@ -50,3 +50,19 @@ it('aligns all 84 heatmap days into twelve Monday to Sunday weeks', async () => 
     vi.useRealTimers();
   }
 });
+
+it('computes weekly suggestions from the current activities, logs, and clock', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(2026, 10, 19, 15));
+  await createActivity({ name: 'Leetcode', category: 'career', timesPerWeek: 5, importance: 'high' });
+  function Suggestions() {
+    const { status, suggestions } = useHubris();
+    return <p>{status === 'ready' ? suggestions.map((suggestion) => suggestion.message).join('|') : 'Loading'}</p>;
+  }
+  try {
+    render(<HubrisProvider><Suggestions /></HubrisProvider>);
+    expect(await screen.findByText('Leetcode needs 5 more this week, with 4 days left.')).toBeTruthy();
+  } finally {
+    vi.useRealTimers();
+  }
+});

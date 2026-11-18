@@ -23,7 +23,7 @@ function setup(overrides: Partial<HubrisState> = {}, actionOverrides: Partial<Hu
   const state: HubrisState = {
     status: 'ready', error: null, now, activities: [activity], logs: [log], onboardingComplete: true,
     report: computeWeeklyReport([activity], [log], now), trend: computeWeeklyTrend([activity], [log], now),
-    heatmap: generateLogHeatmap([log], 84, getWeekBounds(now).end), actions, ...overrides,
+    suggestions: [], heatmap: generateLogHeatmap([log], 84, getWeekBounds(now).end), actions, ...overrides,
   };
   render(<HubrisContext.Provider value={state}><App surface="popup" /></HubrisContext.Provider>);
   return actions;
@@ -162,4 +162,35 @@ describe('segmented radio keyboard', () => {
       expect(radios.filter((radio) => radio.tabIndex === 0)).toHaveLength(1);
     }
   });
+});
+
+
+it.each(['Start blank', 'Start with an example'])('locks earlier onboarding steps after committing %s', async (choice) => {
+  const actions = setup({ onboardingComplete: false });
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  // Earlier steps remain available before committing a starter choice.
+  const intro = screen.getByRole('button', { name: 'Step 1: How it works' });
+  expect(intro).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: new RegExp(choice) }));
+  await screen.findByText('Add a weekly activity');
+  const starter = screen.getByRole('button', { name: 'Step 2: Choose start' });
+  expect(intro).toBeDisabled();
+  expect(starter).toBeDisabled();
+  fireEvent.click(starter);
+  fireEvent.click(intro);
+  expect(screen.getByText('Add a weekly activity')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /Back/ })).toBeNull();
+  expect(actions.completeOnboarding).toHaveBeenCalledTimes(1);
+});
+
+it('explains that Merge restores deleted items only in Merge import confirmation', () => {
+  setup();
+  fireEvent.click(screen.getByRole('tab', { name: 'Settings' }));
+  const copy = 'Merge adds everything in the file that is missing here, including items you deleted after this backup was made.';
+  fireEvent.click(screen.getByRole('radio', { name: 'Merge' }));
+  expect(screen.queryByText(copy)).toBeNull();
+  fireEvent.change(screen.getByLabelText('Import backup file'), { target: { files: [new File(['{}'], 'backup.json')] } });
+  expect(screen.getByText(copy)).toBeTruthy();
+  fireEvent.click(screen.getByRole('radio', { name: 'Replace' }));
+  expect(screen.queryByText(copy)).toBeNull();
 });

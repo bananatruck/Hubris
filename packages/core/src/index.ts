@@ -27,6 +27,9 @@ export * from './weighted-score';
 // Suggestions
 export {
     isAtRisk,
+    isBehindPace,
     generateSuggestions,
     getHomeMotivation,
 } from './suggestions';
+
+export { generateWeeklySuggestions } from './weekly-suggestions';

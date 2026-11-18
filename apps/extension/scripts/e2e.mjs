@@ -212,6 +212,64 @@ try {
     const badge = await worker.evaluate(() => chrome.action.getBadgeText({}));
     assert(/^(?:100|[1-9]?\d)$/.test(badge), `Expected badge integer 0 to 100, got ${JSON.stringify(badge)}`);
   });
+
+  await step(9, 'suggestions', async () => {
+    await popup.evaluate(() => new Promise((resolve, reject) => {
+      const now = new Date();
+      const elapsedDays = (now.getDay() + 6) % 7;
+      const monday = new Date(now);
+      monday.setDate(monday.getDate() - elapsedDays);
+      monday.setHours(0, 0, 0, 0);
+      const created = new Date(monday);
+      created.setDate(created.getDate() - 1);
+      const request = indexedDB.open('hubris', 1);
+      request.onerror = () => reject(request.error);
+      request.onblocked = () => reject(new Error('IndexedDB suggestion seed is blocked'));
+      request.onsuccess = () => {
+        const db = request.result;
+        const tx = db.transaction(['activities', 'logs'], 'readwrite');
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onabort = () => { db.close(); reject(tx.error ?? new Error('Suggestion seed transaction aborted')); };
+        tx.onerror = () => { db.close(); reject(tx.error); };
+        tx.objectStore('activities').put({
+          id: 'e2e-meditation',
+          name: 'Meditation',
+          category: 'health',
+          timesPerWeek: 7,
+          importance: 'high',
+          archived: false,
+          createdAt: created.toISOString(),
+          updatedAt: created.toISOString(),
+        });
+        for (let offset = 0; offset < elapsedDays; offset += 1) {
+          const loggedAt = new Date(monday);
+          loggedAt.setDate(loggedAt.getDate() + offset);
+          loggedAt.setHours(8, 0, 0, 0);
+          tx.objectStore('logs').put({
+            id: `e2e-meditation-${offset}`,
+            activityId: 'e2e-meditation',
+            loggedAt: loggedAt.toISOString(),
+          });
+        }
+      };
+    }));
+    await popup.reload();
+    await selectTab(popup, 'Today');
+    const region = popup.getByRole('region', { name: 'Worth doing next' });
+    const streak = region.getByText('Keep your Meditation streak going: it is not logged today.', { exact: true });
+    await streak.waitFor({ state: 'visible' });
+    const axeSource = await readFile(require.resolve('axe-core'), 'utf8');
+    await popup.evaluate(axeSource);
+    const result = await popup.evaluate(() => window.axe.run(document));
+    const serious = result.violations.filter(({ impact }) => impact === 'serious' || impact === 'critical');
+    assert.equal(serious.length, 0, serious.map((violation) =>
+      `${violation.id} (${violation.impact}) ${violation.help}`).join('\n'));
+    await region.scrollIntoViewIfNeeded();
+    await screenshot(popup, 'popup-suggestions.png');
+    await region.getByRole('button', { name: 'Log Meditation', exact: true }).click();
+    await popup.getByText('Meditation logged', { exact: true }).waitFor({ state: 'visible' });
+    await streak.waitFor({ state: 'hidden' });
+  });
 } catch (error) {
   failed = true;
   console.error(`FAIL Setup: ${error.stack ?? error.message}`);

@@ -1,12 +1,12 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Plus } from 'lucide-react';
-import type { ActivityLog, ActivityScoreRow, ScoredCategory } from '@hubris/types';
+import type { ActivityScoreRow, ScoredCategory } from '@hubris/types';
 import { useHubris } from '../../state/useHubris';
-import { errorMessage } from '../lib/errors';
-import { useNotify } from '../lib/notify';
+import { type ActivityLoggedHandler, useActivityLogger } from '../lib/useActivityLogger';
 import { CATEGORIES, CATEGORY_BY_ID, IMPORTANCE_BY_ID } from '../lib/categories';
 import { getRoundedStatus } from '../lib/format';
 import { ActivityForm } from '../components/ActivityForm';
+import { SuggestionList } from '../components/SuggestionList';
 import { Button } from '../components/21st/button';
 import { Dialog, DialogContent, DialogTrigger } from '../components/21st/dialog';
 import { GlowingEffectCard } from '../components/aceternity/glowing-effect';
@@ -17,7 +17,7 @@ import { CountUp } from '../components/reactbits/count-up';
 import { SpotlightCard } from '../components/reactbits/spotlight-card';
 
 export interface TodayScreenProps {
-  onLogged: (activityName: string, log: ActivityLog) => void;
+  onLogged: ActivityLoggedHandler;
 }
 
 const ORBIT_RADII: Readonly<Record<ScoredCategory, number>> = {
@@ -73,9 +73,7 @@ function GoalDots({ row, color }: { row: ActivityScoreRow; color: string }) {
 
 export function TodayScreen({ onLogged }: TodayScreenProps) {
   const { report, actions } = useHubris();
-  const notify = useNotify();
-  const pendingWrites = useRef(new Set<string>());
-  const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(new Set());
+  const { logActivity, pendingIds } = useActivityLogger(onLogged);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   const { rounded: roundedOverall, word: statusWord } = getRoundedStatus(report.overall);
@@ -94,21 +92,6 @@ export function TodayScreen({ onLogged }: TodayScreenProps) {
     (sum, cat) => sum + report.categories[cat.id].activities.length,
     0,
   );
-
-  const handleLog = async (row: ActivityScoreRow) => {
-    if (pendingWrites.current.has(row.activityId)) return;
-    pendingWrites.current.add(row.activityId);
-    setPendingIds(new Set(pendingWrites.current));
-    try {
-      const createdLog = await actions.logActivity(row.activityId);
-      onLogged(row.name, createdLog);
-    } catch (cause) {
-      notify({ message: errorMessage(cause), tone: 'error' });
-    } finally {
-      pendingWrites.current.delete(row.activityId);
-      setPendingIds(new Set(pendingWrites.current));
-    }
-  };
 
   return (
     <div className="space-y-4">
@@ -179,6 +162,8 @@ export function TodayScreen({ onLogged }: TodayScreenProps) {
           );
         })}
       </section>
+
+      <SuggestionList pendingIds={pendingIds} onLog={logActivity} />
 
       <section aria-label="This week" className="space-y-2.5">
         <div className="flex items-center justify-between">
@@ -254,8 +239,9 @@ export function TodayScreen({ onLogged }: TodayScreenProps) {
                         <button
                           type="button"
                           aria-label={`Log ${row.name}, ${row.done} of ${row.goal} this week`}
+                          data-log-activity={row.activityId}
                           disabled={pendingIds.has(row.activityId)}
-                          onClick={() => void handleLog(row)}
+                          onClick={() => void logActivity(row.activityId, row.name)}
                           className="inline-flex h-7 w-8 items-center justify-center rounded-full bg-accent text-white transition-transform active:scale-95 hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft cursor-pointer"
                         >
                           <svg

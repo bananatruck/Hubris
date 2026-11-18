@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { HubrisExport } from '@hubris/types';
 import { getDB } from './db';
+import { withTransaction } from './transaction';
 import { activitySchema, logSchema, ValidationError } from './validation';
 import { readSnapshot } from './repository';
 
@@ -45,27 +46,28 @@ export async function importData(data: HubrisExport, mode: 'replace' | 'merge') 
   if (!checked.success) throw new ValidationError(checked.error.issues.map((issue) => issue.message).join(' '));
   const db = await getDB();
   const tx = db.transaction(['activities', 'logs', 'meta'], 'readwrite');
-  let activities = 0;
-  let logs = 0;
-  if (mode === 'replace') {
-    await Promise.all([tx.objectStore('activities').clear(), tx.objectStore('logs').clear(), tx.objectStore('meta').clear()]);
-  }
-  for (const activity of checked.data.activities) {
-    const existing = await tx.objectStore('activities').get(activity.id);
-    if (!existing || Date.parse(activity.updatedAt) > Date.parse(existing.updatedAt)) {
-      await tx.objectStore('activities').put(activity);
-      activities++;
+  return withTransaction(tx, async () => {
+    let activities = 0;
+    let logs = 0;
+    if (mode === 'replace') {
+      await Promise.all([tx.objectStore('activities').clear(), tx.objectStore('logs').clear(), tx.objectStore('meta').clear()]);
     }
-  }
-  for (const log of checked.data.logs) {
-    if (!await tx.objectStore('logs').get(log.id)) {
-      await tx.objectStore('logs').add(log);
-      logs++;
+    for (const activity of checked.data.activities) {
+      const existing = await tx.objectStore('activities').get(activity.id);
+      if (!existing || Date.parse(activity.updatedAt) > Date.parse(existing.updatedAt)) {
+        await tx.objectStore('activities').put(activity);
+        activities++;
+      }
     }
-  }
-  await tx.objectStore('meta').put(true, 'onboardingComplete');
-  await tx.done;
-  return { activities, logs };
+    for (const log of checked.data.logs) {
+      if (!await tx.objectStore('logs').get(log.id)) {
+        await tx.objectStore('logs').add(log);
+        logs++;
+      }
+    }
+    await tx.objectStore('meta').put(true, 'onboardingComplete');
+    return { activities, logs };
+  });
 }
 
 export function createBackupDownload(data: HubrisExport) {

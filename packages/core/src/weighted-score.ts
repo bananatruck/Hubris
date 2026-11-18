@@ -106,18 +106,21 @@ export function computeWeeklyReport(
     activities: TrackedActivity[],
     logs: ActivityLog[],
     referenceDate: Date = new Date(),
+    asOf: Date = referenceDate,
 ): WeeklyReport {
     const { start, end } = getWeekBounds(referenceDate);
     const counts = new Map<string, number>();
     for (const log of logs) {
         const date = new Date(log.loggedAt);
-        if (date >= start && date <= end) {
+        if (date >= start && date <= end && date <= asOf) {
             counts.set(log.activityId, (counts.get(log.activityId) ?? 0) + 1);
         }
     }
     function reportFor(category: ScoredCategory): CategoryReport {
         const rows = activities
-            .filter((activity) => !activity.archived && activity.category === category)
+            .filter((activity) => !activity.archived
+                && activity.category === category
+                && new Date(activity.createdAt) <= end)
             .map((activity) => {
                 const done = counts.get(activity.id) ?? 0;
                 return {
@@ -162,7 +165,7 @@ export function computeWeeklyTrend(
     return Array.from({ length: weeks }, (_, index) => {
         const week = new Date(start);
         week.setDate(week.getDate() - (weeks - 1 - index) * 7);
-        const report = computeWeeklyReport(activities, logs, week);
+        const report = computeWeeklyReport(activities, logs, week, referenceDate);
         return {
             weekStart: report.weekStart,
             weekEnd: report.weekEnd,

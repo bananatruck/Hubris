@@ -178,7 +178,7 @@ export function OnboardingScreen({ onEnterStep3, onFinish }: OnboardingScreenPro
       <Stepper
         steps={steps}
         currentStep={step}
-        onStepChange={(next) => {
+        onStepChange={busy || step === 2 ? undefined : (next) => {
           if (next <= step) setStep(next);
         }}
       />
