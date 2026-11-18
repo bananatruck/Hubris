@@ -43,6 +43,7 @@ async function selectTab(page, name) {
 
 async function screenshot(page, filename, fullPage = false) {
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
+  await page.waitForTimeout(800);
   await page.screenshot({ path: path.join(screenshots, filename), fullPage, animations: 'disabled' });
 }
 
@@ -83,6 +84,21 @@ try {
     popup = await context.newPage();
     await popup.goto(`${extensionUrl}/popup.html`);
     await popup.getByText(/Hubris/i).first().waitFor({ state: 'visible' });
+    const h2 = popup.locator('h2').first();
+    await h2.waitFor({ state: 'visible' });
+    const overlayBlocker = await popup.evaluate(() => {
+      const heading = document.querySelector('h2');
+      if (!heading) throw new Error('onboarding has no h2');
+      const rect = heading.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      const top = document.elementFromPoint(x, y);
+      if (!top || top === heading || heading.contains(top)) return null;
+      const tag = top.tagName.toLowerCase();
+      const cls = typeof top.className === 'string' ? top.className : '';
+      return `${tag}${cls ? ` class="${cls}"` : ''}`;
+    });
+    assert.equal(overlayBlocker, null, `onboarding h2 covered by ${overlayBlocker}`);
     await screenshot(popup, 'popup-onboarding.png');
   });
 
@@ -165,6 +181,9 @@ try {
         const label = `${page === popup ? 'popup' : 'sidepanel'} ${name}`;
         const violations = result.violations.filter(({ impact }) => impact === 'serious' || impact === 'critical');
         console.log(`axe ${label}: ${result.passes.length} passed rules, ${result.violations.length} violations, ${violations.length} serious/critical`);
+        for (const violation of result.violations) {
+          console.log(`axe violation ${label}: ${violation.id} (${violation.impact})`);
+        }
         serious.push(...violations.map((violation) => `${label}: ${violation.id} (${violation.impact}) ${violation.help} ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`));
       }
     }
