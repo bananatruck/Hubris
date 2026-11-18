@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ActivityLog } from '@hubris/types';
-import { formatDateKey, generateHeatmapData, generateLogHeatmap } from '../src/heatmap';
+import { formatDateKey, generateHeatmapData, generateLogHeatmap, getDateRange } from '../src/heatmap';
 
 describe('local calendar dates', () => {
     it('keeps a 21:00 log on its local calendar day', () => {
@@ -43,6 +43,12 @@ describe('generateLogHeatmap', () => {
             { date: '2026-01-01', value: 0, logCount: 0, intensity: 0 },
         ]);
         expect(generateLogHeatmap([], 0, new Date(2026, 0, 1))).toEqual([]);
+    });
+
+    it.each([-1, 1.5, NaN, Infinity])('rejects an invalid day count: %s', (days) => {
+        const endDate = new Date(2026, 0, 1);
+        expect(() => getDateRange(days, endDate)).toThrow(RangeError);
+        expect(() => generateLogHeatmap([], days, endDate)).toThrow(RangeError);
     });
 
     it('keeps consecutive local days across the DST transition', () => {

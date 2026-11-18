@@ -37,6 +37,9 @@ export function generateLogHeatmap(
  * Get an array of dates for the last N days.
  */
 export function getDateRange(days: number, endDate: Date = new Date()): Date[] {
+    if (!Number.isSafeInteger(days) || days < 0) {
+        throw new RangeError('days must be a non-negative safe integer');
+    }
     const dates: Date[] = [];
     for (let i = days - 1; i >= 0; i--) {
         const date = new Date(endDate);
