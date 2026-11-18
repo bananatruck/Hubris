@@ -37,8 +37,8 @@ export const EMPTY_PRIORITY_POLICY = 'renormalize' satisfies EmptyGroupPolicy;
 export const EMPTY_CATEGORY_POLICY = 'zero' satisfies EmptyGroupPolicy;
 
 export function activityScore(done: number, goal: number, cap = ACTIVITY_SCORE_CAP): number {
-    if (!Number.isFinite(done) || !Number.isFinite(goal) || !Number.isFinite(cap) || goal <= 0) {
-        throw new RangeError('Activity scoring requires finite inputs and a positive goal.');
+    if (!Number.isFinite(done) || !Number.isFinite(goal) || !Number.isFinite(cap) || goal <= 0 || done < 0) {
+        throw new RangeError('Activity scoring requires finite inputs, a non-negative done count and a positive goal.');
     }
     return Math.min((done / goal) * 100, cap);
 }
@@ -78,7 +78,8 @@ export function overallScore(
     let presentWeight = 0;
     for (const category of SCORED_CATEGORIES) {
         const score = scores[category];
-        if (score === null) continue;
+        // undefined is treated like null so a missing key cannot turn the total into NaN.
+        if (score === null || score === undefined) continue;
         const weight = CATEGORY_WEIGHTS[category];
         weightedSum += score * weight;
         presentWeight += weight;

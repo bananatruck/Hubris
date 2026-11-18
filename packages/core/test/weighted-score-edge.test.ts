@@ -13,6 +13,15 @@ describe('weekly scoring boundaries', () => {
         expect(() => activityScore(done, goal, cap)).toThrow(RangeError);
     });
 
+    it('rejects a negative done count', () => {
+        expect(() => activityScore(-1, 5)).toThrow(RangeError);
+    });
+
+    it('treats a missing category like an empty one instead of returning NaN', () => {
+        const partial = { career: 50, health: 50 } as unknown as Parameters<typeof overallScore>[0];
+        expect(overallScore(partial)).toBeCloseTo(0.36 * 50 + 0.36 * 50, 12);
+    });
+
     it('supports a custom cap and preserves fractional scores', () => {
         expect(activityScore(7, 5, 150)).toBe(140);
         expect(activityScore(1, 3)).toBeCloseTo(100 / 3, 12);
