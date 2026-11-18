@@ -19,7 +19,10 @@ export {
     calculateIntensity,
     generateHeatmapData,
     generateMiniHeatmap,
+    generateLogHeatmap,
 } from './heatmap';
+
+export * from './weighted-score';
 
 // Suggestions
 export {
