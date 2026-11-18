@@ -90,19 +90,27 @@ it('rejects non-JSON', () => {
 });
 
 it('keeps a local edit after merging a backup from a device whose clock ran ahead', async () => {
-  const activity = await createActivity({ name: 'Leetcode', category: 'career', timesPerWeek: 5, importance: 'high' });
-  const ahead = new Date(Date.now() + 10 * 60_000).toISOString();
-  const backup: HubrisExport = {
-    app: 'hubris', schemaVersion: 1, exportedAt: ahead,
-    activities: [{ ...activity, name: 'Leetcode from the other device', updatedAt: ahead }],
-    logs: [],
-  };
-  await importData(backup, 'merge');
-  const edited = await updateActivity(activity.id, { name: 'Leetcode edited here' });
-  expect(Date.parse(edited.updatedAt)).toBeGreaterThan(Date.parse(ahead));
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-11-18T12:00:00Z'));
+  try {
+    const activity = await createActivity({ name: 'Leetcode', category: 'career', timesPerWeek: 5, importance: 'high' });
+    const ahead = new Date(Date.now() + 10 * 60_000).toISOString();
+    const backup: HubrisExport = {
+      app: 'hubris', schemaVersion: 1, exportedAt: ahead,
+      activities: [{ ...activity, name: 'Leetcode from the other device', updatedAt: ahead }],
+      logs: [],
+    };
+    await importData(backup, 'merge');
+    expect((await listActivities())[0].updatedAt).toBe(ahead);
+    const edited = await updateActivity(activity.id, { name: 'Leetcode edited here' });
+    expect(Date.now()).toBeLessThan(Date.parse(ahead));
+    expect(Date.parse(edited.updatedAt)).toBeGreaterThan(Date.parse(ahead));
 
-  await importData(backup, 'merge');
-  expect((await listActivities())[0].name).toBe('Leetcode edited here');
+    await importData(backup, 'merge');
+    expect((await listActivities())[0].name).toBe('Leetcode edited here');
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it('preserves the original put error and rolls back an aborted replace import', async () => {
@@ -110,6 +118,22 @@ it('preserves the original put error and rolls back an aborted replace import', 
   const failure = new Error('Put failed.');
   const put = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementationOnce(function (this: IDBObjectStore) {
     this.transaction.abort();
+    throw failure;
+  });
+  try {
+    await expect(importData(previous, 'replace')).rejects.toBe(failure);
+  } finally {
+    put.mockRestore();
+  }
+  expect(await listActivities()).toEqual(previous.activities);
+  expect(await listLogs()).toEqual(previous.logs);
+  expect(await getMeta('onboardingComplete')).toBeUndefined();
+});
+
+it('preserves the original put error and lets the transaction helper roll back replace', async () => {
+  const previous = await fixture();
+  const failure = new Error('Put failed without an explicit abort.');
+  const put = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementationOnce(() => {
     throw failure;
   });
   try {
