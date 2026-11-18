@@ -224,18 +224,18 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
             <TabsContent value="settings" className="focus:outline-none">
               <SettingsScreen />
             </TabsContent>
+
+            <Toast toast={toast} onDismiss={dismissToast} durationMs={6000} />
           </main>
 
-          <Toast toast={toast} onDismiss={dismissToast} durationMs={6000} />
-
-          <div className="sticky bottom-0 z-30 mt-auto">
+          <nav aria-label="Main navigation" className="sticky bottom-0 z-30 mt-auto">
             <AceternityTabBar
-              ariaLabel="Main navigation"
+              ariaLabel="Sections"
               value={activeTab}
               onValueChange={(val) => setActiveTab(val as TabValue)}
               items={NAV_ITEMS}
             />
-          </div>
+          </nav>
         </TabsRoot>
       )}
     </div>
