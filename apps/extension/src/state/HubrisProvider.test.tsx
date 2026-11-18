@@ -25,18 +25,24 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 it('loads stored activities, logs and undoes an activity, and recomputes the report', async () => {
-  await createActivity({ name: 'Practice', category: 'career', timesPerWeek: 1, importance: 'high' });
-  render(<HubrisProvider><Consumer /></HubrisProvider>);
-  await screen.findByText('Status: ready');
-  expect(screen.getByText('Score: 0')).toBeTruthy();
-  expect(screen.getByText('Trend: 8')).toBeTruthy();
-  expect(screen.getByText('Heatmap: 84')).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Log' }));
-  await waitFor(() => { expect(screen.getByText('Score: 36')).toBeTruthy(); });
-  expect(screen.getByText('Logs: 1')).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
-  await waitFor(() => { expect(screen.getByText('Score: 0')).toBeTruthy(); });
-  expect(screen.getByText('Logs: 0')).toBeTruthy();
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(2026, 10, 18, 12));
+  try {
+    await createActivity({ name: 'Practice', category: 'career', timesPerWeek: 1, importance: 'high' });
+    render(<HubrisProvider><Consumer /></HubrisProvider>);
+    await screen.findByText('Status: ready');
+    expect(screen.getByText('Score: 0')).toBeTruthy();
+    expect(screen.getByText('Trend: 8')).toBeTruthy();
+    expect(screen.getByText('Heatmap: 84')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Log' }));
+    await waitFor(() => { expect(screen.getByText('Score: 36')).toBeTruthy(); });
+    expect(screen.getByText('Logs: 1')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    await waitFor(() => { expect(screen.getByText('Score: 0')).toBeTruthy(); });
+    expect(screen.getByText('Logs: 0')).toBeTruthy();
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it('keeps loaded data ready when a refresh fails', async () => {
