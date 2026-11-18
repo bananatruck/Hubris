@@ -111,6 +111,27 @@ describe('Hubris UI', () => {
     expect(screen.getByLabelText('Activity name')).toHaveValue('Unsubmitted draft');
   });
 
+  it('returns to the optional activity step after retrying a failed starter refresh', async () => {
+    const readSnapshot = vi.spyOn(repository, 'readSnapshot');
+    render(
+      <HubrisProvider>
+        <App surface="popup" />
+      </HubrisProvider>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Next' }));
+    readSnapshot.mockRejectedValue(new Error('Refresh failed.'));
+    fireEvent.click(screen.getByRole('button', { name: /Start blank/ }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Refresh failed.');
+    expect(screen.getByText('Add a weekly activity')).toBeTruthy();
+    readSnapshot.mockRestore();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    expect(screen.getByText('Add a weekly activity')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Skip for now' })).toBeTruthy();
+  });
+
   it('lists weekly suggestions with their exact action names', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date(2026, 10, 19, 15));
