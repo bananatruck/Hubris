@@ -41,15 +41,14 @@ export function AnimatedCircularProgressBar({
   return (
     <div
       className={cn('relative inline-flex items-center justify-center select-none', className)}
-      role="img"
-      aria-label={ariaSummary}
     >
       <svg
         width={size}
         height={size}
         viewBox={`0 0 ${size} ${size}`}
         className="overflow-visible"
-        aria-hidden="true"
+        role="img"
+        aria-label={ariaSummary}
       >
         {arcs.map((arc) => {
           const circumference = 2 * Math.PI * arc.radius;

@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import type { ActivityLog, ActivityScoreRow, ScoredCategory } from '@hubris/types';
 import { useHubris } from '../../state/useHubris';
+import { errorMessage } from '../lib/errors';
+import { useNotify } from '../lib/notify';
 import { CATEGORIES, CATEGORY_BY_ID, IMPORTANCE_BY_ID } from '../lib/categories';
 import { getRoundedStatus } from '../lib/format';
 import { ActivityForm } from '../components/ActivityForm';
@@ -71,6 +73,9 @@ function GoalDots({ row, color }: { row: ActivityScoreRow; color: string }) {
 
 export function TodayScreen({ onLogged }: TodayScreenProps) {
   const { report, actions } = useHubris();
+  const notify = useNotify();
+  const pendingWrites = useRef(new Set<string>());
+  const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(new Set());
   const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   const { rounded: roundedOverall, word: statusWord } = getRoundedStatus(report.overall);
@@ -91,8 +96,18 @@ export function TodayScreen({ onLogged }: TodayScreenProps) {
   );
 
   const handleLog = async (row: ActivityScoreRow) => {
-    const createdLog = await actions.logActivity(row.activityId);
-    onLogged(row.name, createdLog);
+    if (pendingWrites.current.has(row.activityId)) return;
+    pendingWrites.current.add(row.activityId);
+    setPendingIds(new Set(pendingWrites.current));
+    try {
+      const createdLog = await actions.logActivity(row.activityId);
+      onLogged(row.name, createdLog);
+    } catch (cause) {
+      notify({ message: errorMessage(cause), tone: 'error' });
+    } finally {
+      pendingWrites.current.delete(row.activityId);
+      setPendingIds(new Set(pendingWrites.current));
+    }
   };
 
   return (
@@ -239,6 +254,7 @@ export function TodayScreen({ onLogged }: TodayScreenProps) {
                         <button
                           type="button"
                           aria-label={`Log ${row.name}, ${row.done} of ${row.goal} this week`}
+                          disabled={pendingIds.has(row.activityId)}
                           onClick={() => void handleLog(row)}
                           className="inline-flex h-7 w-8 items-center justify-center rounded-full bg-accent text-white transition-transform active:scale-95 hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft cursor-pointer"
                         >

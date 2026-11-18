@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Sparkles, FilePlus2 } from 'lucide-react';
 import { useHubris } from '../../state/useHubris';
+import { errorMessage } from '../lib/errors';
 import { CATEGORIES, IMPORTANCE_OPTIONS } from '../lib/categories';
 import { ActivityForm } from '../components/ActivityForm';
 import { Button } from '../components/21st/button';
@@ -16,14 +17,18 @@ export interface OnboardingScreenProps {
 export function OnboardingScreen({ onEnterStep3, onFinish }: OnboardingScreenProps) {
   const { actions } = useHubris();
   const [step, setStep] = useState(0);
+  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const handleChooseStarter = async (withExamples: boolean) => {
     setBusy(true);
+    setError(null);
     onEnterStep3?.();
     try {
       await actions.completeOnboarding(withExamples);
       setStep(2);
+    } catch (cause) {
+      setError(errorMessage(cause));
     } finally {
       setBusy(false);
     }
@@ -126,6 +131,8 @@ export function OnboardingScreen({ onEnterStep3, onFinish }: OnboardingScreenPro
               </div>
             </button>
           </div>
+
+          {error && <p role="alert" className="text-xs text-red-200">{error}</p>}
 
           <div className="flex justify-between pt-1">
             <Button variant="ghost" onClick={() => setStep(0)}>

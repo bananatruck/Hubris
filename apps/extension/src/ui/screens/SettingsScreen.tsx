@@ -2,6 +2,9 @@ import { useId, useState, type ChangeEvent } from 'react';
 import { Archive, ArchiveRestore, Download, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import type { TrackedActivity } from '@hubris/types';
 import { useHubris } from '../../state/useHubris';
+import { errorMessage } from '../lib/errors';
+import { useNotify } from '../lib/notify';
+import { useDialogAction } from '../lib/useDialogAction';
 import { CATEGORY_BY_ID, IMPORTANCE_BY_ID } from '../lib/categories';
 import { ActivityForm } from '../components/ActivityForm';
 import { Button } from '../components/21st/button';
@@ -17,6 +20,9 @@ const IMPORT_MODE_OPTIONS: readonly SegmentedOption<'replace' | 'merge'>[] = [
 
 export function SettingsScreen() {
   const uid = useId();
+  const notify = useNotify();
+  const deletion = useDialogAction();
+  const erasure = useDialogAction();
   const fileInputId = `${uid}-backup-file`;
   const eraseInputId = `${uid}-erase-input`;
 
@@ -37,6 +43,7 @@ export function SettingsScreen() {
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
+    event.target.value = '';
     setSelectedFile(file);
     setImportSuccess(null);
     setImportErrors([]);
@@ -54,25 +61,32 @@ export function SettingsScreen() {
       );
       setSelectedFile(null);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not import backup file.';
+      const message = errorMessage(error);
       setImportErrors(message.split('\n').filter((line) => line.trim().length > 0));
     } finally {
       setImporting(false);
     }
   };
 
-  const handleConfirmDeleteActivity = async () => {
+  const handleConfirmDeleteActivity = () => {
     if (!deletingActivity) return;
-    const id = deletingActivity.id;
-    setDeletingActivity(null);
-    await actions.deleteActivity(id);
+    void deletion.run(() => actions.deleteActivity(deletingActivity.id), () => setDeletingActivity(null));
   };
 
-  const handleConfirmEraseAll = async () => {
-    if (eraseConfirmation !== 'ERASE') return;
-    setEraseOpen(false);
-    setEraseConfirmation('');
-    await actions.eraseAll();
+  const handleConfirmEraseAll = () => {
+    if (eraseConfirmation !== 'erase') return;
+    void erasure.run(actions.eraseAll, () => {
+      setEraseOpen(false);
+      setEraseConfirmation('');
+    });
+  };
+
+  const handleQuickAction = async (operation: () => Promise<unknown>) => {
+    try {
+      await operation();
+    } catch (cause) {
+      notify({ message: errorMessage(cause), tone: 'error' });
+    }
   };
 
   return (
@@ -149,7 +163,7 @@ export function SettingsScreen() {
                           ? `Restore ${activity.name}`
                           : `Archive ${activity.name}`
                       }
-                      onClick={() => void actions.setArchived(activity.id, !activity.archived)}
+                      onClick={() => void handleQuickAction(() => actions.setArchived(activity.id, !activity.archived))}
                     >
                       {activity.archived ? (
                         <ArchiveRestore className="h-3.5 w-3.5" aria-hidden="true" />
@@ -161,7 +175,7 @@ export function SettingsScreen() {
                       variant="ghost"
                       size="icon"
                       aria-label={`Delete ${activity.name}`}
-                      onClick={() => setDeletingActivity(activity)}
+                      onClick={() => { deletion.clearError(); setDeletingActivity(activity); }}
                     >
                       <Trash2 className="h-3.5 w-3.5 text-muted hover:text-red-300" aria-hidden="true" />
                     </Button>
@@ -186,7 +200,7 @@ export function SettingsScreen() {
                 Download your activities and logs as a JSON file.
               </p>
             </div>
-            <Button variant="secondary" onClick={() => void actions.exportBackup()}>
+            <Button variant="secondary" onClick={() => void handleQuickAction(actions.exportBackup)}>
               <Download className="h-3.5 w-3.5" aria-hidden="true" />
               Export backup
             </Button>
@@ -284,7 +298,7 @@ export function SettingsScreen() {
                 Permanently remove all activities, logs, and settings.
               </p>
             </div>
-            <Button variant="danger" onClick={() => setEraseOpen(true)}>
+            <Button variant="danger" onClick={() => { erasure.clearError(); setEraseOpen(true); }}>
               Erase all data
             </Button>
           </div>
@@ -352,7 +366,7 @@ export function SettingsScreen() {
       <Dialog
         open={deletingActivity !== null}
         onOpenChange={(open) => {
-          if (!open) setDeletingActivity(null);
+          if (!open && !deletion.pending) setDeletingActivity(null);
         }}
       >
         <DialogContent
@@ -363,11 +377,12 @@ export function SettingsScreen() {
             <p className="text-xs text-muted">
               Delete <strong className="text-text font-medium">{deletingActivity?.name}</strong>? All logs recorded for this activity will be permanently deleted too.
             </p>
+            {deletion.error && <p role="alert" className="text-xs text-red-200">{deletion.error}</p>}
             <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setDeletingActivity(null)}>
+              <Button variant="secondary" disabled={deletion.pending} onClick={() => setDeletingActivity(null)}>
                 Cancel
               </Button>
-              <Button variant="danger" onClick={() => void handleConfirmDeleteActivity()}>
+              <Button variant="danger" disabled={deletion.pending} onClick={handleConfirmDeleteActivity}>
                 Delete activity and logs
               </Button>
             </div>
@@ -378,27 +393,31 @@ export function SettingsScreen() {
       <Dialog
         open={eraseOpen}
         onOpenChange={(open) => {
+          if (erasure.pending) return;
           setEraseOpen(open);
           if (!open) setEraseConfirmation('');
         }}
       >
         <DialogContent
           title="Erase all data"
-          description="Type ERASE to permanently delete all local activities and logs."
+          description="Permanently delete all local activities and logs."
         >
           <div className="space-y-3 pt-2">
             <label htmlFor={eraseInputId} className="block text-xs text-muted">
-              Type <strong className="text-text font-semibold">ERASE</strong> below to confirm permanent deletion:
+              Type erase to confirm
             </label>
             <Input
               id={eraseInputId}
               value={eraseConfirmation}
               onChange={(event) => setEraseConfirmation(event.target.value)}
-              placeholder="ERASE"
+              placeholder="erase"
+              disabled={erasure.pending}
             />
+            {erasure.error && <p role="alert" className="text-xs text-red-200">{erasure.error}</p>}
             <div className="flex justify-end gap-2">
               <Button
                 variant="secondary"
+                disabled={erasure.pending}
                 onClick={() => {
                   setEraseOpen(false);
                   setEraseConfirmation('');
@@ -408,8 +427,8 @@ export function SettingsScreen() {
               </Button>
               <Button
                 variant="danger"
-                disabled={eraseConfirmation !== 'ERASE'}
-                onClick={() => void handleConfirmEraseAll()}
+                disabled={erasure.pending || eraseConfirmation !== 'erase'}
+                onClick={handleConfirmEraseAll}
               >
                 Confirm erase
               </Button>

@@ -5,6 +5,7 @@ import { cn } from '../../lib/cn';
 export interface ToastData {
   id: string;
   message: string;
+  tone?: 'info' | 'error';
   onUndo?: () => void;
 }
 
@@ -37,11 +38,12 @@ export function Toast({
         <div
           className={cn(
             'fixed bottom-16 left-3 right-3 z-50 mx-auto flex max-w-[356px] items-center justify-between gap-3 rounded-xl border border-accent-soft/40 bg-raised px-3.5 py-2.5 text-xs text-text shadow-xl',
+            toast.tone === 'error' && 'border-red-500/60 text-red-200',
             className,
           )}
         >
-          <span className="font-medium text-text">{toast.message}</span>
-          {toast.onUndo && (
+          <span className="font-medium">{toast.message}</span>
+          {toast.tone !== 'error' && toast.onUndo && (
             <button
               type="button"
               onClick={() => {

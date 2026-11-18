@@ -3,6 +3,7 @@ import { Trash2 } from 'lucide-react';
 import { formatDateKey } from '@hubris/core';
 import type { ActivityLog, ScoredCategory } from '@hubris/types';
 import { useHubris } from '../../state/useHubris';
+import { useDialogAction } from '../lib/useDialogAction';
 import { CATEGORIES, CATEGORY_BY_ID } from '../lib/categories';
 import { formatDayHeading, formatLogTime } from '../lib/format';
 import { Button } from '../components/21st/button';
@@ -23,6 +24,7 @@ const FILTER_OPTIONS: readonly SegmentedOption<CategoryFilter>[] = [
 
 export function HistoryScreen() {
   const { activities, logs, now, actions } = useHubris();
+  const deletion = useDialogAction();
   const [filter, setFilter] = useState<CategoryFilter>('all');
   const [logToDelete, setLogToDelete] = useState<ActivityLog | null>(null);
 
@@ -52,11 +54,9 @@ export function HistoryScreen() {
     return Array.from(groups.entries());
   }, [logs, filter, activityMap]);
 
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = () => {
     if (!logToDelete) return;
-    const id = logToDelete.id;
-    setLogToDelete(null);
-    await actions.deleteLog(id);
+    void deletion.run(() => actions.deleteLog(logToDelete.id), () => setLogToDelete(null));
   };
 
   return (
@@ -132,7 +132,7 @@ export function HistoryScreen() {
                         variant="ghost"
                         size="icon"
                         aria-label={`Delete log for ${activityName}`}
-                        onClick={() => setLogToDelete(log)}
+                        onClick={() => { deletion.clearError(); setLogToDelete(log); }}
                       >
                         <Trash2 className="h-3.5 w-3.5 text-muted hover:text-red-300" aria-hidden="true" />
                       </Button>
@@ -148,7 +148,7 @@ export function HistoryScreen() {
       <Dialog
         open={logToDelete !== null}
         onOpenChange={(open) => {
-          if (!open) setLogToDelete(null);
+          if (!open && !deletion.pending) setLogToDelete(null);
         }}
       >
         <DialogContent
@@ -163,11 +163,12 @@ export function HistoryScreen() {
               </strong>
               ?
             </p>
+            {deletion.error && <p role="alert" className="text-xs text-red-200">{deletion.error}</p>}
             <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setLogToDelete(null)}>
+              <Button variant="secondary" disabled={deletion.pending} onClick={() => setLogToDelete(null)}>
                 Cancel
               </Button>
-              <Button variant="danger" onClick={() => void handleConfirmDelete()}>
+              <Button variant="danger" disabled={deletion.pending} onClick={handleConfirmDelete}>
                 Confirm delete
               </Button>
             </div>

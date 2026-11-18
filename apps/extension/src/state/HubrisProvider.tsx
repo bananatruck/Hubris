@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { computeWeeklyReport, computeWeeklyTrend, generateLogHeatmap } from '@hubris/core';
+import { computeWeeklyReport, computeWeeklyTrend, generateLogHeatmap, getWeekBounds } from '@hubris/core';
 import * as repository from '../storage/repository';
 import { downloadBackup, exportData, importData, parseBackup } from '../storage/backup';
 import { isDataChangedMessage, notifyDataChanged } from '../shared/messages';
@@ -80,7 +80,7 @@ export function HubrisProvider({ children }: { children: ReactNode }) {
     status, error, now, ...snapshot, actions,
     report: computeWeeklyReport(snapshot.activities, snapshot.logs, now),
     trend: computeWeeklyTrend(snapshot.activities, snapshot.logs, now, 8),
-    heatmap: generateLogHeatmap(snapshot.logs, 84, now),
+    heatmap: generateLogHeatmap(snapshot.logs, 84, getWeekBounds(now).end),
   }), [status, error, now, snapshot, actions]);
 
   return <HubrisContext.Provider value={value}>{children}</HubrisContext.Provider>;

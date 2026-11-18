@@ -1,3 +1,4 @@
+import { formatDateKey } from '@hubris/core';
 import { useState } from 'react';
 import type { DayHeatmapCell } from '@hubris/types';
 import { useHubris } from '../../state/useHubris';
@@ -31,7 +32,7 @@ function parseLocalWeekday(dateKey: string): number {
 }
 
 export function TrendsScreen() {
-  const { logs, report, trend, heatmap } = useHubris();
+  const { logs, report, trend, heatmap, now } = useHubris();
   const [activeCell, setActiveCell] = useState<DayHeatmapCell | null>(null);
 
   const currentWeekPoint = trend[trend.length - 1];
@@ -253,18 +254,19 @@ export function TrendsScreen() {
                 </span>
                 <div className="grid grid-cols-12 gap-1">
                   {rowCells.map((cell) => {
-                    const label = `${formatHeatmapDate(cell.date)}: ${cell.logCount} ${cell.logCount === 1 ? 'log' : 'logs'}`;
+                    const upcoming = cell.date > formatDateKey(now);
+                    const label = upcoming ? `${formatHeatmapDate(cell.date)}, upcoming` : `${formatHeatmapDate(cell.date)}: ${cell.logCount} ${cell.logCount === 1 ? 'log' : 'logs'}`;
                     return (
                       <button
                         key={cell.date}
                         type="button"
                         title={label}
                         aria-label={label}
-                        onMouseEnter={() => setActiveCell(cell)}
-                        onFocus={() => setActiveCell(cell)}
+                        onMouseEnter={() => setActiveCell(upcoming ? null : cell)}
+                        onFocus={() => setActiveCell(upcoming ? null : cell)}
                         onMouseLeave={() => setActiveCell(null)}
                         onBlur={() => setActiveCell(null)}
-                        className={`aspect-square w-full rounded-[3px] border transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft ${INTENSITY_STYLES[cell.intensity]}`}
+                        className={`aspect-square w-full rounded-[3px] border transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft ${upcoming ? 'bg-transparent border-line' : INTENSITY_STYLES[cell.intensity]}`}
                       />
                     );
                   })}

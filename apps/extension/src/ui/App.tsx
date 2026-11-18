@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { AlertCircle, BarChart3, CalendarCheck2, Clock, PanelRightOpen, RotateCcw, Settings } from 'lucide-react';
 import type { ActivityLog } from '@hubris/types';
 import { useHubris } from '../state/useHubris';
+import { NotificationContext, type Notification } from './lib/notify';
+import { errorMessage } from './lib/errors';
 import { formatWeekRange } from './lib/format';
 import { Button } from './components/21st/button';
 import { Toast, type ToastData } from './components/21st/toast';
@@ -89,23 +91,35 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
     return () => window.removeEventListener('resize', handleResize);
   }, [surface]);
 
+  const notify = useCallback((notification: Notification) => {
+    setToast({ ...notification, id: crypto.randomUUID() });
+  }, []);
+
   const handleOpenSidePanel = () => {
     if (typeof chrome !== 'undefined' && chrome.sidePanel?.open && windowId !== null) {
-      void chrome.sidePanel.open({ windowId });
+      try {
+        void chrome.sidePanel.open({ windowId }).catch((cause: unknown) => {
+          notify({ message: errorMessage(cause), tone: 'error' });
+        });
+      } catch (cause) {
+        notify({ message: errorMessage(cause), tone: 'error' });
+      }
     }
   };
 
   const handleLogged = useCallback(
     (activityName: string, log: ActivityLog) => {
-      setToast({
-        id: log.id,
+      notify({
+        tone: 'info',
         message: `${activityName} logged`,
         onUndo: () => {
-          void actions.undoLog(log);
+          void actions.undoLog(log).catch(() => {
+            notify({ message: 'Could not undo. The log is still there.', tone: 'error' });
+          });
         },
       });
     },
-    [actions],
+    [actions, notify],
   );
 
   const dismissToast = useCallback(() => {
@@ -116,128 +130,130 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
   const showOnboarding = !onboardingComplete || keepOnboardingForStep3;
 
   return (
-    <div
-      data-surface={surface}
-      className={
-        surface === 'popup'
-          ? 'flex min-h-[600px] w-full max-w-[380px] flex-col bg-ink text-text'
-          : 'mx-auto flex min-h-screen w-full max-w-5xl flex-col bg-ink text-text'
-      }
-    >
-      <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-line bg-ink/95 px-3.5 py-2.5 backdrop-blur-md">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div
-            aria-hidden="true"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent font-display text-base font-extrabold text-white shadow-xs"
-          >
-            H
-          </div>
-          <div className="min-w-0">
-            <h1 className="font-display text-sm font-bold leading-tight text-text">
-              Hubris
-            </h1>
-            {weekRangeText && (
-              <p className="text-[11px] text-muted leading-tight tabular-nums">
-                {weekRangeText}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {canShowSidePanelButton && (
-          <Button
-            variant="secondary"
-            size="icon"
-            aria-label="Open side panel"
-            title="Open side panel"
-            onClick={handleOpenSidePanel}
-          >
-            <PanelRightOpen className="h-4 w-4" aria-hidden="true" />
-          </Button>
-        )}
-      </header>
-
-      {status === 'loading' ? (
-        <main className="flex-1">
-          <LoadingSkeleton />
-        </main>
-      ) : status === 'error' ? (
-        <main className="flex flex-1 items-center justify-center p-4">
-          <SpotlightCard className="w-full max-w-sm p-5 text-center space-y-3">
-            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-red-950 text-red-300 border border-red-500/40">
-              <AlertCircle className="h-5 w-5" aria-hidden="true" />
+    <NotificationContext.Provider value={notify}>
+      <div
+        data-surface={surface}
+        className={
+          surface === 'popup'
+            ? 'flex min-h-[600px] w-full max-w-[380px] flex-col bg-ink text-text'
+            : 'mx-auto flex min-h-screen w-full max-w-5xl flex-col bg-ink text-text'
+        }
+      >
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-line bg-ink/95 px-3.5 py-2.5 backdrop-blur-md">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div
+              aria-hidden="true"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent font-display text-base font-extrabold text-white shadow-xs"
+            >
+              H
             </div>
-            <div className="space-y-1">
-              <h2 className="font-display text-base font-semibold text-text">
-                Could not load your ledger
-              </h2>
-              <p role="alert" className="text-xs text-red-200">
-                {error ?? 'Could not read local data. Try again.'}
-              </p>
+            <div className="min-w-0">
+              <h1 className="font-display text-sm font-bold leading-tight text-text">
+                Hubris
+              </h1>
+              {weekRangeText && (
+                <p className="text-[11px] text-muted leading-tight tabular-nums">
+                  {weekRangeText}
+                </p>
+              )}
             </div>
-            <Button variant="primary" onClick={() => void actions.retry()}>
-              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-              Retry
+          </div>
+
+          {canShowSidePanelButton && (
+            <Button
+              variant="secondary"
+              size="icon"
+              aria-label="Open side panel"
+              title="Open side panel"
+              disabled={windowId === null}
+              onClick={handleOpenSidePanel}
+            >
+              <PanelRightOpen className="h-4 w-4" aria-hidden="true" />
             </Button>
-          </SpotlightCard>
-        </main>
-      ) : showOnboarding ? (
-        <main className="flex-1 overflow-y-auto">
-          <OnboardingScreen
-            onEnterStep3={() => setKeepOnboardingForStep3(true)}
-            onFinish={() => setKeepOnboardingForStep3(false)}
-          />
-        </main>
-      ) : (
-        <TabsRoot
-          value={activeTab}
-          onValueChange={(val) => setActiveTab(val as TabValue)}
-          className="flex flex-1 flex-col min-h-0"
-        >
-          <main className="flex-1 overflow-y-auto px-3.5 py-3 pb-20">
-            <TabsContent value="today" className="focus:outline-none">
-              {isWideSidePanel ? (
-                <div className="grid grid-cols-2 gap-5 items-start">
-                  <TodayScreen onLogged={handleLogged} />
-                  <TrendsScreen />
-                </div>
-              ) : (
-                <TodayScreen onLogged={handleLogged} />
-              )}
-            </TabsContent>
+          )}
+        </header>
 
-            <TabsContent value="trends" className="focus:outline-none">
-              {isWideSidePanel ? (
-                <div className="grid grid-cols-2 gap-5 items-start">
-                  <TodayScreen onLogged={handleLogged} />
-                  <TrendsScreen />
-                </div>
-              ) : (
-                <TrendsScreen />
-              )}
-            </TabsContent>
-
-            <TabsContent value="history" className="focus:outline-none">
-              <HistoryScreen />
-            </TabsContent>
-
-            <TabsContent value="settings" className="focus:outline-none">
-              <SettingsScreen />
-            </TabsContent>
-
-            <Toast toast={toast} onDismiss={dismissToast} durationMs={6000} />
+        {status === 'loading' ? (
+          <main className="flex-1">
+            <LoadingSkeleton />
           </main>
-
-          <nav aria-label="Main navigation" className="sticky bottom-0 z-30 mt-auto">
-            <AceternityTabBar
-              ariaLabel="Sections"
-              value={activeTab}
-              onValueChange={(val) => setActiveTab(val as TabValue)}
-              items={NAV_ITEMS}
+        ) : status === 'error' ? (
+          <main className="flex flex-1 items-center justify-center p-4">
+            <SpotlightCard className="w-full max-w-sm p-5 text-center space-y-3">
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-red-950 text-red-300 border border-red-500/40">
+                <AlertCircle className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div className="space-y-1">
+                <h2 className="font-display text-base font-semibold text-text">
+                  Could not load your ledger
+                </h2>
+                <p role="alert" className="text-xs text-red-200">
+                  {error ?? 'Could not read local data. Try again.'}
+                </p>
+              </div>
+              <Button variant="primary" onClick={() => void actions.retry()}>
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                Retry
+              </Button>
+            </SpotlightCard>
+          </main>
+        ) : showOnboarding ? (
+          <main className="flex-1 overflow-y-auto">
+            <OnboardingScreen
+              onEnterStep3={() => setKeepOnboardingForStep3(true)}
+              onFinish={() => setKeepOnboardingForStep3(false)}
             />
-          </nav>
-        </TabsRoot>
-      )}
-    </div>
+          </main>
+        ) : (
+          <TabsRoot
+            value={activeTab}
+            onValueChange={(val) => setActiveTab(val as TabValue)}
+            className="flex flex-1 flex-col min-h-0"
+          >
+            <main className="flex-1 overflow-y-auto px-3.5 py-3 pb-20">
+              <TabsContent value="today" className="focus:outline-none">
+                {isWideSidePanel ? (
+                  <div className="grid grid-cols-2 gap-5 items-start">
+                    <TodayScreen onLogged={handleLogged} />
+                    <TrendsScreen />
+                  </div>
+                ) : (
+                  <TodayScreen onLogged={handleLogged} />
+                )}
+              </TabsContent>
+
+              <TabsContent value="trends" className="focus:outline-none">
+                {isWideSidePanel ? (
+                  <div className="grid grid-cols-2 gap-5 items-start">
+                    <TodayScreen onLogged={handleLogged} />
+                    <TrendsScreen />
+                  </div>
+                ) : (
+                  <TrendsScreen />
+                )}
+              </TabsContent>
+
+              <TabsContent value="history" className="focus:outline-none">
+                <HistoryScreen />
+              </TabsContent>
+
+              <TabsContent value="settings" className="focus:outline-none">
+                <SettingsScreen />
+              </TabsContent>
+            </main>
+
+            <nav aria-label="Main navigation" className="sticky bottom-0 z-30 mt-auto">
+              <AceternityTabBar
+                ariaLabel="Sections"
+                value={activeTab}
+                onValueChange={(val) => setActiveTab(val as TabValue)}
+                items={NAV_ITEMS}
+              />
+            </nav>
+          </TabsRoot>
+        )}
+        <Toast toast={toast} onDismiss={dismissToast} durationMs={6000} />
+      </div>
+    </NotificationContext.Provider>
   );
 }

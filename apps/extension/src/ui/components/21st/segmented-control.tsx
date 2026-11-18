@@ -1,6 +1,6 @@
 // 21st.dev - https://21st.dev/components/segmented-control
 import { motion, useReducedMotion } from 'motion/react';
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 
 export interface SegmentedOption<T extends string> {
@@ -28,6 +28,7 @@ export function SegmentedControl<T extends string>({
   layoutId,
   className,
 }: SegmentedControlProps<T>) {
+  const buttons = useRef(new Map<T, HTMLButtonElement>());
   const prefersReducedMotion = useReducedMotion();
 
   return (
@@ -40,7 +41,7 @@ export function SegmentedControl<T extends string>({
         className,
       )}
     >
-      {options.map((option) => {
+      {options.map((option, index) => {
         const selected = option.value === value;
         return (
           <button
@@ -48,6 +49,22 @@ export function SegmentedControl<T extends string>({
             type="button"
             role="radio"
             aria-checked={selected}
+            tabIndex={selected ? 0 : -1}
+            ref={(element) => {
+              if (element) buttons.current.set(option.value, element);
+              else buttons.current.delete(option.value);
+            }}
+            onKeyDown={(event) => {
+              const direction = event.key === 'ArrowRight' || event.key === 'ArrowDown'
+                ? 1 : event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 0;
+              if (!direction) return;
+              event.preventDefault();
+              const next = options[(index + direction + options.length) % options.length];
+              if (next) {
+                onChange(next.value);
+                buttons.current.get(next.value)?.focus();
+              }
+            }}
             onClick={() => onChange(option.value)}
             className={cn(
               'relative flex flex-col items-center justify-center rounded-md px-2 py-1.5 text-xs font-medium transition-colors cursor-pointer',

@@ -1,6 +1,7 @@
 import { useId, useState, type FormEvent } from 'react';
 import type { Importance, ScoredCategory } from '@hubris/types';
 import type { CreateActivityInput } from '../../storage/repository';
+import { errorMessage } from '../lib/errors';
 import { CATEGORIES, IMPORTANCE_BY_ID, IMPORTANCE_OPTIONS } from '../lib/categories';
 import { PlaceholdersAndVanishInput } from './aceternity/placeholders-and-vanish-input';
 import { Button } from './21st/button';
@@ -99,7 +100,7 @@ export function ActivityForm({
       });
       onSuccess?.();
     } catch (error) {
-      setRepoError(error instanceof Error ? error.message : 'Could not save activity.');
+      setRepoError(errorMessage(error));
     } finally {
       setSubmitting(false);
     }
