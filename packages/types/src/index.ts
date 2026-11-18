@@ -55,11 +55,13 @@ export type VisibilityState =
 
 export type Category =
     | 'career'
+    | 'health'
     | 'entertainment'
     | 'hobbies-habits';
 
 export const CATEGORY_LABELS: Record<Category, string> = {
     career: 'Career',
+    health: 'Health',
     entertainment: 'Entertainment',
     'hobbies-habits': 'Hobbies & Habits',
 };
@@ -191,4 +193,81 @@ export interface TodayStats {
     completedToday: number;
     plannedRemaining: number;
     atRiskCount: number;
+}
+
+// --------------------------------------------
+// Weekly Weighted Scoring (Kesh's score-per-category spec, docs/SPEC.md)
+// --------------------------------------------
+
+/** How much an activity matters inside its category (40 / 35 / 25 percent). */
+export type Importance = 'high' | 'medium' | 'low';
+
+/**
+ * Categories that feed the overall score (36 / 36 / 28 percent).
+ *
+ * ENTERTAINMENT_EXTENSION_POINT: Entertainment is deliberately not listed here.
+ * Kesh's note describes it as a separate catalog with its own score and stops
+ * at "Movies:", so its rules are still his to decide.
+ */
+export type ScoredCategory = 'career' | 'health' | 'hobbies-habits';
+
+export interface TrackedActivity {
+    id: string;
+    name: string;
+    category: ScoredCategory;
+    /** Weekly frequency goal, an integer from 1 to 99 ("5 times a week"). */
+    timesPerWeek: number;
+    importance: Importance;
+    /** Archived activities keep their logs but leave the score. */
+    archived: boolean;
+    createdAt: string; // ISO date
+    updatedAt: string; // ISO date
+}
+
+/** One log entry means the activity was done once. */
+export interface ActivityLog {
+    id: string;
+    activityId: string;
+    loggedAt: string; // ISO date
+    note?: string;
+}
+
+export interface ActivityScoreRow {
+    activityId: string;
+    name: string;
+    importance: Importance;
+    goal: number;
+    done: number;
+    /** 0 to 100, already capped. */
+    score: number;
+}
+
+export interface CategoryReport {
+    category: ScoredCategory;
+    /** null when the category has no active activities. */
+    score: number | null;
+    activities: ActivityScoreRow[];
+}
+
+export interface WeeklyReport {
+    weekStart: string; // ISO date, Monday 00:00 local
+    weekEnd: string; // ISO date, Sunday 23:59:59.999 local
+    /** 0 to 100, full precision; round only for display. */
+    overall: number;
+    categories: Record<ScoredCategory, CategoryReport>;
+}
+
+export interface WeeklyTrendPoint {
+    weekStart: string;
+    weekEnd: string;
+    overall: number;
+    categories: Record<ScoredCategory, number | null>;
+}
+
+export interface HubrisExport {
+    app: 'hubris';
+    schemaVersion: 1;
+    exportedAt: string; // ISO date
+    activities: TrackedActivity[];
+    logs: ActivityLog[];
 }

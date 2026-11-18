@@ -2,13 +2,35 @@
 // Hubris Core - Heatmap Data Transformer
 // ============================================
 
-import { LogEntry, DayHeatmapCell, TrackingTemplate } from '@hubris/types';
+import type { ActivityLog, LogEntry, DayHeatmapCell, TrackingTemplate } from '@hubris/types';
 
 /**
  * Format a date as YYYY-MM-DD.
  */
 export function formatDateKey(date: Date): string {
-    return date.toISOString().split('T')[0];
+    const year = String(date.getFullYear()).padStart(4, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+/** Count all activity logs by local calendar day, oldest day first. */
+export function generateLogHeatmap(
+    logs: ActivityLog[],
+    days: number = 365,
+    endDate: Date = new Date(),
+): DayHeatmapCell[] {
+    const counts = new Map<string, number>();
+    for (const log of logs) {
+        const key = formatDateKey(new Date(log.loggedAt));
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return getDateRange(days, endDate).map((date) => {
+        const key = formatDateKey(date);
+        const value = counts.get(key) ?? 0;
+        const intensity = value >= 5 ? 4 : value >= 3 ? 3 : value === 2 ? 2 : value === 1 ? 1 : 0;
+        return { date: key, value, logCount: value, intensity };
+    });
 }
 
 /**
@@ -99,7 +121,7 @@ export function generateHeatmapData(
         const dayLogs = logsByDay.get(dateKey) || [];
 
         // Aggregate value based on template
-        let value = 0;
+        let value: number;
         if (template === 'binary') {
             value = dayLogs.some((log) => log.completed !== false) ? 1 : 0;
         } else {

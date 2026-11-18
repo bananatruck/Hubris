@@ -27,6 +27,11 @@
         },
         "clean": {
             "cache": false
+        },
+        "test": {
+            "dependsOn": [
+                "^build"
+            ]
         }
     }
 }

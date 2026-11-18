@@ -1,0 +1,41 @@
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/bricolage-grotesque';
+@import 'tailwindcss';
+
+@theme {
+  --color-ink: #09090f;
+  --color-panel: #12121a;
+  --color-raised: #191925;
+  --color-line: #292735;
+  --color-text: #f7f5fb;
+  --color-muted: #9792a2;
+  --color-accent: #7c3aed;
+  --color-accent-soft: #a78bfa;
+  --color-career: #3b82f6;
+  --color-health: #22c55e;
+  --color-hobbies: #f59e0b;
+  --font-display: 'Bricolage Grotesque Variable', sans-serif;
+  --font-sans: 'Inter Variable', sans-serif;
+}
+html { background: var(--color-ink); color: var(--color-text); font-family: var(--font-sans); overflow-x: hidden; }
+body { margin: 0; overflow-x: hidden; -webkit-font-smoothing: antialiased; }
+html[data-surface='popup'] body { width: 380px; height: 600px; overflow-y: auto; overflow-x: hidden; }
+html[data-surface='sidepanel'] body { min-width: 320px; min-height: 100vh; overflow-x: hidden; }
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+@keyframes hubris-border-beam {
+  0% { offset-distance: 0%; }
+  100% { offset-distance: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
