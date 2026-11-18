@@ -33,6 +33,42 @@ it('merges newer activities, retains newer local records and dedupes logs', asyn
   expect(await listLogs()).toHaveLength(1);
 });
 
+it('merges an activity whose sub-millisecond timestamp is newer', async () => {
+  const data = await fixture();
+  const existing: HubrisExport = {
+    ...data,
+    activities: data.activities.map((activity) => ({ ...activity, updatedAt: '2026-01-01T00:00:00.1230Z' })),
+  };
+  await importData(existing, 'replace');
+  const newer: HubrisExport = {
+    ...existing,
+    activities: existing.activities.map((activity) => ({
+      ...activity, name: 'Sub-millisecond edit', updatedAt: '2026-01-01T00:00:00.1239Z',
+    })),
+  };
+
+  expect(await importData(newer, 'merge')).toEqual({ activities: 1, logs: 0 });
+  expect((await listActivities())[0].name).toBe('Sub-millisecond edit');
+});
+
+it('treats equivalent full-precision timestamps with different offsets as equal', async () => {
+  const data = await fixture();
+  const existing: HubrisExport = {
+    ...data,
+    activities: data.activities.map((activity) => ({ ...activity, updatedAt: '2026-01-01T00:00:00.123900Z' })),
+  };
+  await importData(existing, 'replace');
+  const equivalent: HubrisExport = {
+    ...existing,
+    activities: existing.activities.map((activity) => ({
+      ...activity, name: 'Equivalent edit', updatedAt: '2025-12-31T19:00:00.1239-05:00',
+    })),
+  };
+
+  expect(await importData(equivalent, 'merge')).toEqual({ activities: 0, logs: 0 });
+  expect((await listActivities())[0].name).toBe('Gym');
+});
+
 it.each(['app', 'schemaVersion', 'dangling', 'duplicateActivity', 'duplicateLog', 'date', 'field'])('rejects invalid backup: %s', async (kind) => {
   const data = await fixture();
   const variants: Record<string, unknown> = {

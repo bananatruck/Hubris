@@ -41,6 +41,21 @@ export async function exportData(): Promise<HubrisExport> {
   return { app: 'hubris', schemaVersion: 1, exportedAt: new Date().toISOString(), activities, logs };
 }
 
+function compareTimestamps(left: string, right: string) {
+  const leftMilliseconds = Date.parse(left);
+  const rightMilliseconds = Date.parse(right);
+  if (leftMilliseconds !== rightMilliseconds) return leftMilliseconds > rightMilliseconds ? 1 : -1;
+
+  const fractionalDigits = (value: string) =>
+    (value.match(/\.(\d+)(?:Z|[+-]\d{2}:\d{2})$/)?.[1] ?? '').slice(3);
+  const leftExtra = fractionalDigits(left);
+  const rightExtra = fractionalDigits(right);
+  const width = Math.max(leftExtra.length, rightExtra.length);
+  const normalizedLeft = leftExtra.padEnd(width, '0');
+  const normalizedRight = rightExtra.padEnd(width, '0');
+  return normalizedLeft === normalizedRight ? 0 : normalizedLeft > normalizedRight ? 1 : -1;
+}
+
 export async function importData(data: HubrisExport, mode: 'replace' | 'merge') {
   const checked = backupSchema.safeParse(data);
   if (!checked.success) throw new ValidationError(checked.error.issues.map((issue) => issue.message).join(' '));
@@ -54,7 +69,7 @@ export async function importData(data: HubrisExport, mode: 'replace' | 'merge') 
     }
     for (const activity of checked.data.activities) {
       const existing = await tx.objectStore('activities').get(activity.id);
-      if (!existing || Date.parse(activity.updatedAt) > Date.parse(existing.updatedAt)) {
+      if (!existing || compareTimestamps(activity.updatedAt, existing.updatedAt) > 0) {
         await tx.objectStore('activities').put(activity);
         activities++;
       }
