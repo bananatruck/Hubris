@@ -26,7 +26,7 @@ export const logSchema = z.object({
   id: z.string().min(1),
   activityId: z.string().min(1),
   loggedAt: z.iso.datetime({ offset: true }),
-  note: z.string().optional(),
+  note: z.string().trim().max(280, 'Keep the note under 280 characters.').optional(),
 }).strict();
 
 export function validate<T>(schema: z.ZodType<T>, input: unknown): T {

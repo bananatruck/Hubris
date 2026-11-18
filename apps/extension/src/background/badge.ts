@@ -1,6 +1,8 @@
+import { getStatusDisplayLabel, getStatusLabel } from '@hubris/core';
+
 export function getBadgeState(score: number, hasActiveActivities: boolean) {
   const rounded = Math.round(score);
-  const status = score >= 80 ? 'On track' : score >= 50 ? 'Catching up' : 'Needs love';
+  const status = getStatusDisplayLabel(getStatusLabel(rounded));
   return {
     text: hasActiveActivities ? String(rounded) : '',
     title: `Hubris - this week: ${rounded} (${status})`,

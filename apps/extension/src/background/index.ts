@@ -21,16 +21,27 @@ function refresh() {
     // The next alarm retries when storage is available again.
   });
 }
-function initialize() {
-  void chrome.alarms.create(ALARM_NAME, { periodInMinutes: 15 });
-  refresh();
+async function initialize() {
+  try {
+    // Re-creating an existing alarm would restart its period on every worker wake.
+    if (await chrome.alarms.get(ALARM_NAME) === undefined) {
+      await chrome.alarms.create(ALARM_NAME, { periodInMinutes: 15 });
+    }
+  } finally {
+    refresh();
+  }
 }
-chrome.runtime.onInstalled.addListener(initialize);
-chrome.runtime.onStartup.addListener(initialize);
+function start() {
+  void initialize().catch(() => {
+    // The badge still refreshes on the next data change.
+  });
+}
+chrome.runtime.onInstalled.addListener(start);
+chrome.runtime.onStartup.addListener(start);
 chrome.runtime.onMessage.addListener((message: unknown) => {
   if (isDataChangedMessage(message)) refresh();
 });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM_NAME) refresh();
 });
-initialize();
+start();

@@ -41,6 +41,11 @@ describe('repository', () => {
     expect(() => validate(activityInputSchema, { ...input, ...patch })).toThrow(repo.ValidationError);
   });
 
+  it('rejects log notes longer than 280 characters', async () => {
+    const activity = await repo.createActivity(input);
+    await expect(repo.addLog(activity.id, 'n'.repeat(281))).rejects.toThrow(repo.ValidationError);
+  });
+
   it('validates updates and rejects missing activity logs', async () => {
     await expect(repo.createActivity({ ...input, name: '' })).rejects.toThrow(repo.ValidationError);
     const activity = await repo.createActivity(input);
