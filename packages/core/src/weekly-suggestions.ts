@@ -63,5 +63,12 @@ export function generateWeeklySuggestions(
                 `Nothing logged yet today. ${light.activity.name} would lift your ${CATEGORY_NAMES[light.activity.category]} score.`, 5);
         }
     }
-    return suggestions.sort((a, b) => b.priority - a.priority).slice(0, 3);
+    const byId = new Map(activities.map((activity) => [activity.id, activity]));
+    const rank = (s: Suggestion) => IMPORTANCE_RANK[byId.get(s.activityId ?? '')?.importance ?? 'low'];
+    const name = (s: Suggestion) => byId.get(s.activityId ?? '')?.name ?? '';
+    // Within one priority, the same importance-then-name order as report rows.
+    return suggestions
+        .sort((a, b) => b.priority - a.priority || rank(a) - rank(b)
+            || name(a).localeCompare(name(b), undefined, { sensitivity: 'base' }))
+        .slice(0, 3);
 }

@@ -74,3 +74,20 @@ describe('ties', () => {
         expect(ids).toEqual(['high', 'mid']);
     });
 });
+
+describe('same priority bucket', () => {
+    it('orders equal-priority at-risk suggestions by importance, then name, not by score', () => {
+        const base: TrackedActivity = {
+            id: '', name: '', category: 'career', timesPerWeek: 10, importance: 'low', archived: false,
+            createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+        };
+        // Thursday: Low is 2 of 10 (20), High is 2 of 9 (22.2); both have priority 10 - 2 = 8.
+        const low = { ...base, id: 'low', name: 'Low', importance: 'low' as const };
+        const high = { ...base, id: 'high', name: 'High', importance: 'high' as const, timesPerWeek: 9 };
+        const logs = ['low', 'low', 'high', 'high'].map((activityId, i) => ({
+            id: `l${i}`, activityId, loggedAt: new Date(2026, 10, 16 + (i % 2), 9).toISOString(),
+        }));
+        const result = generateWeeklySuggestions([low, high], logs, new Date(2026, 10, 19, 15));
+        expect(result.map((s) => [s.activityId, s.priority])).toEqual([['high', 8], ['low', 8]]);
+    });
+});

@@ -78,7 +78,8 @@ describe('generateWeeklySuggestions', () => {
         const logs = [logOn('a', 16), logOn('a', 17), logOn('b', 16), logOn('c', 19, 8)];
         // a: 2 of 9 (22.2), b: 1 of 8 (12.5), c: 1 of 7 (14.3), all with more than 4 left.
         const suggestions = generateWeeklySuggestions(activities, logs, THURSDAY);
-        expect(suggestions.filter((s) => s.type === 'at-risk').map((s) => s.activityId)).toEqual(['b', 'c']);
+        // b and c are the two worst; both have priority 9, so High (c) comes before Medium (b).
+        expect(suggestions.filter((s) => s.type === 'at-risk').map((s) => s.activityId)).toEqual(['c', 'b']);
     });
 
     it('ignores archived activities, met goals and logs outside this week', () => {
