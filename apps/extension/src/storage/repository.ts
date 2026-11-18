@@ -6,6 +6,14 @@ export { ValidationError } from './validation';
 export type CreateActivityInput = Omit<TrackedActivity, 'id' | 'createdAt' | 'updatedAt' | 'archived'> & { archived?: boolean };
 export type ActivityPatch = Partial<Omit<TrackedActivity, 'id' | 'createdAt' | 'updatedAt'>>;
 
+/**
+ * A merged backup can carry an updatedAt from a device whose clock ran ahead.
+ * Local edits must still compare as newer, or merging that backup again would revert them.
+ */
+function nextUpdatedAt(previous: string) {
+  return new Date(Math.max(Date.now(), Date.parse(previous) + 1)).toISOString();
+}
+
 export async function listActivities() {
   return (await getDB()).getAll('activities');
 }
@@ -27,7 +35,7 @@ export async function updateActivity(id: string, patch: ActivityPatch) {
   if (!current) throw new ValidationError('Activity no longer exists.');
   const { name, category, timesPerWeek, importance, archived } = current;
   const fields = validate(activityInputSchema, { name, category, timesPerWeek, importance, archived, ...patch });
-  const updated = { ...current, ...fields, updatedAt: new Date().toISOString() };
+  const updated = { ...current, ...fields, updatedAt: nextUpdatedAt(current.updatedAt) };
   await tx.store.put(updated);
   await tx.done;
   return updated;

@@ -1,6 +1,6 @@
 import { beforeEach, expect, it } from 'vitest';
 import type { HubrisExport } from '@hubris/types';
-import { createActivity, addLog, eraseAll, listActivities, listLogs, getMeta } from './repository';
+import { createActivity, addLog, eraseAll, listActivities, listLogs, getMeta, updateActivity } from './repository';
 import { createBackupDownload, exportData, importData, parseBackup } from './backup';
 
 beforeEach(eraseAll);
@@ -51,4 +51,20 @@ it.each(['app', 'schemaVersion', 'dangling', 'duplicateActivity', 'duplicateLog'
 });
 it('rejects non-JSON', () => {
   expect(parseBackup('{')).toEqual({ success: false, errors: ['This file is not valid JSON.'] });
+});
+
+it('keeps a local edit after merging a backup from a device whose clock ran ahead', async () => {
+  const activity = await createActivity({ name: 'Leetcode', category: 'career', timesPerWeek: 5, importance: 'high' });
+  const ahead = new Date(Date.now() + 10 * 60_000).toISOString();
+  const backup: HubrisExport = {
+    app: 'hubris', schemaVersion: 1, exportedAt: ahead,
+    activities: [{ ...activity, name: 'Leetcode from the other device', updatedAt: ahead }],
+    logs: [],
+  };
+  await importData(backup, 'merge');
+  const edited = await updateActivity(activity.id, { name: 'Leetcode edited here' });
+  expect(Date.parse(edited.updatedAt)).toBeGreaterThan(Date.parse(ahead));
+
+  await importData(backup, 'merge');
+  expect((await listActivities())[0].name).toBe('Leetcode edited here');
 });
