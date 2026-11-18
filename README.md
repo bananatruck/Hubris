@@ -70,6 +70,8 @@ Export a backup from Settings before you remove the extension, because removing 
 
 ## Getting Started
 
+You need Node.js 22.22.2 or newer on the 22 line, 24.15 or newer, or 26 and later (the range Vite 8, Vitest 5, ESLint 10 and jsdom 31 share), and pnpm 10.
+
 ```bash
 # Install dependencies
 pnpm install
