@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { Flame, Hourglass, Sun } from 'lucide-react';
 import type { Suggestion } from '@hubris/types';
 import { useHubris } from '../../state/useHubris';
@@ -21,6 +21,22 @@ function SuggestionIcon({ type }: { type: Suggestion['type'] }) {
 export function SuggestionList({ pendingIds, onLog }: SuggestionListProps) {
   const headingId = useId();
   const { activities, suggestions } = useHubris();
+  const listRef = useRef<HTMLUListElement>(null);
+  // The suggestion a keyboard or pointer user just logged, and where it sat in the list.
+  const pendingFocus = useRef<{ activityId: string; index: number } | null>(null);
+  const suggestedIds = suggestions.slice(0, 3).map((suggestion) => suggestion.activityId).join(',');
+
+  useEffect(() => {
+    const pending = pendingFocus.current;
+    if (!pending || suggestedIds.split(',').includes(pending.activityId)) return;
+    pendingFocus.current = null;
+    // Only step in when the removed button took focus with it; never pull focus from where the user went.
+    if (document.activeElement && document.activeElement !== document.body) return;
+    const buttons = listRef.current?.querySelectorAll<HTMLButtonElement>('button') ?? [];
+    const target = buttons[pending.index] ?? buttons[pending.index - 1]
+      ?? document.querySelector<HTMLElement>(`[data-log-activity="${CSS.escape(pending.activityId)}"]`);
+    target?.focus();
+  }, [suggestedIds]);
   const activeActivities = activities.filter((activity) => !activity.archived);
   if (activeActivities.length === 0) return null;
 
@@ -37,8 +53,8 @@ export function SuggestionList({ pendingIds, onLog }: SuggestionListProps) {
       {rows.length === 0 ? (
         <p className="text-xs text-muted">You are on pace this week.</p>
       ) : (
-        <ul className="space-y-1.5">
-          {rows.map(({ activity, suggestion }) => {
+        <ul ref={listRef} className="space-y-1.5">
+          {rows.map(({ activity, suggestion }, index) => {
             const category = CATEGORY_BY_ID[activity.category];
             return (
               <li key={suggestion.id}>
@@ -66,7 +82,10 @@ export function SuggestionList({ pendingIds, onLog }: SuggestionListProps) {
                         variant="primary"
                         size="sm"
                         disabled={pendingIds.has(activity.id)}
-                        onClick={() => void onLog(activity.id, activity.name)}
+                        onClick={() => {
+                          pendingFocus.current = { activityId: activity.id, index };
+                          void onLog(activity.id, activity.name);
+                        }}
                       >
                         {suggestion.ctaLabel}
                       </Button>

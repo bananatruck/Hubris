@@ -239,6 +239,7 @@ export function TodayScreen({ onLogged }: TodayScreenProps) {
                         <button
                           type="button"
                           aria-label={`Log ${row.name}, ${row.done} of ${row.goal} this week`}
+                          data-log-activity={row.activityId}
                           disabled={pendingIds.has(row.activityId)}
                           onClick={() => void logActivity(row.activityId, row.name)}
                           className="inline-flex h-7 w-8 items-center justify-center rounded-full bg-accent text-white transition-transform active:scale-95 hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft cursor-pointer"

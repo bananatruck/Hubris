@@ -140,6 +140,38 @@ describe('Hubris UI', () => {
     expect(within(region).getByText('You are on pace this week.')).toBeTruthy();
   });
 
+  it('moves focus to the weekly log button when a logged suggestion disappears', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 19, 15));
+    await completeOnboarding(false);
+    const meditation = await createActivity({ name: 'Meditation', category: 'health', timesPerWeek: 7, importance: 'high' });
+    for (const day of [16, 17, 18]) await addLog(meditation.id, undefined, new Date(2026, 10, day, 8));
+    render(<HubrisProvider><App surface="popup" /></HubrisProvider>);
+    const region = await screen.findByRole('region', { name: 'Worth doing next' });
+    const logButton = within(region).getByRole('button', { name: 'Log Meditation' });
+    logButton.focus();
+    fireEvent.click(logButton);
+    await waitFor(() => expect(within(region).queryByRole('button', { name: 'Log Meditation' })).toBeNull());
+    await waitFor(() => expect(document.activeElement?.getAttribute('aria-label')).toMatch(/^Log Meditation, /));
+  });
+
+  it('leaves focus alone when the user moved elsewhere before the suggestion disappeared', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 19, 15));
+    await completeOnboarding(false);
+    const meditation = await createActivity({ name: 'Meditation', category: 'health', timesPerWeek: 7, importance: 'high' });
+    for (const day of [16, 17, 18]) await addLog(meditation.id, undefined, new Date(2026, 10, day, 8));
+    render(<HubrisProvider><App surface="popup" /></HubrisProvider>);
+    const region = await screen.findByRole('region', { name: 'Worth doing next' });
+    const logButton = within(region).getByRole('button', { name: 'Log Meditation' });
+    logButton.focus();
+    fireEvent.click(logButton);
+    const elsewhere = screen.getByRole('button', { name: 'Add activity' });
+    elsewhere.focus();
+    await waitFor(() => expect(within(region).queryByRole('button', { name: 'Log Meditation' })).toBeNull());
+    expect(document.activeElement).toBe(elsewhere);
+  });
+
   it('shows an on-pace line when active activities have no suggestions', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date(2026, 10, 19, 15));
