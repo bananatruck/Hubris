@@ -46,3 +46,31 @@ describe('weekly suggestion data and copy', () => {
             .toBe(`Nothing logged yet today. Gym would lift your ${label} score.`);
     });
 });
+
+describe('ties', () => {
+    // Storage order is random (UUID keys), so equal scores must break by importance, then name.
+    const base: TrackedActivity = {
+        id: '', name: '', category: 'career', timesPerWeek: 3, importance: 'low', archived: false,
+        createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const thursday = new Date(2026, 10, 19, 15);
+
+    it('picks the light-day activity by importance, then name, whatever the storage order', () => {
+        const zeta = { ...base, id: 'z', name: 'Zeta', importance: 'low' as const };
+        const beta = { ...base, id: 'b', name: 'Beta', importance: 'high' as const };
+        const alpha = { ...base, id: 'a', name: 'Alpha', importance: 'high' as const };
+        for (const order of [[zeta, beta, alpha], [alpha, zeta, beta], [beta, alpha, zeta]]) {
+            const [first] = generateWeeklySuggestions(order, [], thursday);
+            expect(first?.activityId).toBe('a');
+        }
+    });
+
+    it('orders tied at-risk activities by importance, then name', () => {
+        const low = { ...base, id: 'low', name: 'Low', importance: 'low' as const, timesPerWeek: 9 };
+        const high = { ...base, id: 'high', name: 'High', importance: 'high' as const, timesPerWeek: 9 };
+        const mid = { ...base, id: 'mid', name: 'Mid', importance: 'medium' as const, timesPerWeek: 9 };
+        const ids = generateWeeklySuggestions([low, mid, high], [], thursday)
+            .filter((s) => s.type === 'at-risk').map((s) => s.activityId);
+        expect(ids).toEqual(['high', 'mid']);
+    });
+});

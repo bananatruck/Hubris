@@ -1,7 +1,9 @@
-import type { ActivityLog, ScoredCategory, Suggestion, TrackedActivity } from '@hubris/types';
+import type { ActivityLog, Importance, ScoredCategory, Suggestion, TrackedActivity } from '@hubris/types';
 import { formatDateKey } from './heatmap';
 import { isBehindPace } from './suggestions';
 import { computeWeeklyReport, SCORED_CATEGORIES } from './weighted-score';
+
+const IMPORTANCE_RANK: Readonly<Record<Importance, number>> = { high: 0, medium: 1, low: 2 };
 
 const CATEGORY_NAMES: Readonly<Record<ScoredCategory, string>> = {
     career: 'Career', health: 'Health', 'hobbies-habits': 'Hobbies',
@@ -22,7 +24,10 @@ export function generateWeeklySuggestions(
             const row = rows.get(activity.id);
             return row ? [{ activity, ...row, remaining: Math.max(row.goal - row.done, 0) }] : [];
         })
-        .sort((a, b) => a.score - b.score);
+        // Storage order is random (UUID keys): break score ties by importance, then name, like report rows.
+        .sort((a, b) => a.score - b.score
+            || IMPORTANCE_RANK[a.activity.importance] - IMPORTANCE_RANK[b.activity.importance]
+            || a.activity.name.localeCompare(b.activity.name, undefined, { sensitivity: 'base' }));
     const today = formatDateKey(now);
     const loggedToday = new Set(logs.filter((log) => {
         const date = new Date(log.loggedAt);
