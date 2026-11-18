@@ -115,6 +115,21 @@ it('renders future heatmap cells as empty upcoming days without counts', () => {
   expect(cell).not.toHaveAttribute('title', expect.stringContaining('logs'));
 });
 
+it('gives the heatmap one tab stop and moves focus between days with arrow keys', () => {
+  setup();
+  fireEvent.click(screen.getByRole('tab', { name: 'Trends' }));
+  const heatmap = screen.getByRole('group', { name: '12-week activity heatmap, Monday to Sunday' });
+  const cells = within(heatmap).getAllByRole('button');
+  expect(cells.filter((cell) => cell.tabIndex === 0)).toHaveLength(1);
+
+  const previousWednesday = within(heatmap).getByRole('button', { name: 'Wed, Nov 11: 0 logs' });
+  previousWednesday.focus();
+  fireEvent.keyDown(previousWednesday, { key: 'ArrowRight' });
+
+  expect(within(heatmap).getByRole('button', { name: 'Wed, Nov 18: 1 log' })).toHaveFocus();
+  expect(cells.filter((cell) => cell.tabIndex === 0)).toHaveLength(1);
+});
+
 it('resets the file input so the same backup can be chosen again', async () => {
   const actions = setup();
   fireEvent.click(screen.getByRole('tab', { name: 'Settings' }));

@@ -1,5 +1,5 @@
 import { formatDateKey } from '@hubris/core';
-import { useState } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import type { DayHeatmapCell } from '@hubris/types';
 import { useHubris } from '../../state/useHubris';
 import { CATEGORIES } from '../lib/categories';
@@ -34,6 +34,13 @@ function parseLocalWeekday(dateKey: string): number {
 export function TrendsScreen() {
   const { logs, report, trend, heatmap, now } = useHubris();
   const [activeCell, setActiveCell] = useState<DayHeatmapCell | null>(null);
+  const todayKey = formatDateKey(now);
+  const [tabStopDate, setTabStopDate] = useState<string | null>(() =>
+    heatmap.find((cell) => cell.date === todayKey)?.date
+      ?? heatmap[0]?.date
+      ?? null,
+  );
+  const heatmapButtons = useRef(new Map<string, HTMLButtonElement>());
 
   const currentWeekPoint = trend[trend.length - 1];
   const previousWeekPoint = trend.length >= 2 ? trend[trend.length - 2] : undefined;
@@ -41,6 +48,21 @@ export function TrendsScreen() {
   const allActivities = CATEGORIES.flatMap((cat) => report.categories[cat.id].activities);
   const totalGoalUnits = allActivities.reduce((sum, a) => sum + a.goal, 0);
   const totalDoneUnits = allActivities.reduce((sum, a) => sum + Math.min(a.done, a.goal), 0);
+
+  const handleHeatmapKeyDown = (event: KeyboardEvent<HTMLButtonElement>, date: string) => {
+    const index = heatmap.findIndex((cell) => cell.date === date);
+    const offset = {
+      ArrowLeft: -7,
+      ArrowRight: 7,
+      ArrowUp: -1,
+      ArrowDown: 1,
+    }[event.key];
+    if (index < 0 || offset === undefined) return;
+    const next = heatmap[index + offset];
+    if (!next) return;
+    event.preventDefault();
+    heatmapButtons.current.get(next.date)?.focus();
+  };
 
   return (
     <div className="space-y-4">
@@ -254,18 +276,27 @@ export function TrendsScreen() {
                 </span>
                 <div className="grid grid-cols-12 gap-1">
                   {rowCells.map((cell) => {
-                    const upcoming = cell.date > formatDateKey(now);
+                    const upcoming = cell.date > todayKey;
                     const label = upcoming ? `${formatHeatmapDate(cell.date)}, upcoming` : `${formatHeatmapDate(cell.date)}: ${cell.logCount} ${cell.logCount === 1 ? 'log' : 'logs'}`;
                     return (
                       <button
                         key={cell.date}
+                        ref={(button) => {
+                          if (button) heatmapButtons.current.set(cell.date, button);
+                          else heatmapButtons.current.delete(cell.date);
+                        }}
                         type="button"
                         title={label}
                         aria-label={label}
+                        tabIndex={cell.date === tabStopDate ? 0 : -1}
                         onMouseEnter={() => setActiveCell(upcoming ? null : cell)}
-                        onFocus={() => setActiveCell(upcoming ? null : cell)}
+                        onFocus={() => {
+                          setTabStopDate(cell.date);
+                          setActiveCell(upcoming ? null : cell);
+                        }}
                         onMouseLeave={() => setActiveCell(null)}
                         onBlur={() => setActiveCell(null)}
+                        onKeyDown={(event) => handleHeatmapKeyDown(event, cell.date)}
                         className={`aspect-square w-full rounded-[3px] border transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft ${upcoming ? 'bg-transparent border-line' : INTENSITY_STYLES[cell.intensity]}`}
                       />
                     );
