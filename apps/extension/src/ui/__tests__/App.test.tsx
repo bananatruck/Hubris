@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { HubrisProvider } from '../../state/HubrisProvider';
 import {
   completeOnboarding,
@@ -8,6 +8,7 @@ import {
   createActivity,
   eraseAll,
   listActivities,
+  listLogs,
   ValidationError,
 } from '../../storage/repository';
 import { App } from '../App';
@@ -19,6 +20,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
 });
 
 describe('Hubris UI', () => {
@@ -76,6 +78,94 @@ describe('Hubris UI', () => {
     await screen.findByRole('button', {
       name: 'Log Leetcode, 0 of 5 this week',
     });
+  });
+
+  it('lists weekly suggestions with their exact action names', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 19, 15));
+    await completeOnboarding(false);
+    await createActivity({
+      name: 'Leetcode',
+      category: 'career',
+      timesPerWeek: 5,
+      importance: 'high',
+    });
+    const meditation = await createActivity({
+      name: 'Meditation',
+      category: 'health',
+      timesPerWeek: 7,
+      importance: 'high',
+    });
+    for (const day of [16, 17, 18]) {
+      await addLog(meditation.id, undefined, new Date(2026, 10, day, 8));
+    }
+
+    render(<HubrisProvider><App surface="popup" /></HubrisProvider>);
+
+    const region = await screen.findByRole('region', { name: 'Worth doing next' });
+    expect(within(region).getByText('Leetcode needs 5 more this week, with 4 days left.')).toBeTruthy();
+    expect(within(region).getByText('Keep your Meditation streak going: it is not logged today.')).toBeTruthy();
+    expect(within(region).getByRole('button', { name: 'Log Leetcode' })).toBeTruthy();
+    expect(within(region).getByRole('button', { name: 'Log Meditation' })).toBeTruthy();
+  });
+
+  it('logs a suggestion once, offers Undo, and refreshes the suggestion', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 19, 15));
+    await completeOnboarding(false);
+    const meditation = await createActivity({
+      name: 'Meditation',
+      category: 'health',
+      timesPerWeek: 7,
+      importance: 'high',
+    });
+    for (const day of [16, 17, 18]) {
+      await addLog(meditation.id, undefined, new Date(2026, 10, day, 8));
+    }
+    render(<HubrisProvider><App surface="popup" /></HubrisProvider>);
+    const region = await screen.findByRole('region', { name: 'Worth doing next' });
+    const logButton = within(region).getByRole('button', { name: 'Log Meditation' });
+
+    fireEvent.click(logButton);
+    fireEvent.click(logButton);
+
+    await screen.findByText('Meditation logged');
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeTruthy();
+    await waitFor(async () => {
+      expect(await listLogs()).toHaveLength(4);
+    });
+    await waitFor(() => {
+      expect(within(region).queryByText(/Keep your Meditation streak going/)).toBeNull();
+    });
+    expect(within(region).getByText('You are on pace this week.')).toBeTruthy();
+  });
+
+  it('shows an on-pace line when active activities have no suggestions', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 19, 15));
+    await completeOnboarding(false);
+    const reading = await createActivity({
+      name: 'Reading',
+      category: 'hobbies-habits',
+      timesPerWeek: 3,
+      importance: 'medium',
+    });
+    await addLog(reading.id, undefined, new Date(2026, 10, 19, 8));
+
+    render(<HubrisProvider><App surface="popup" /></HubrisProvider>);
+
+    const region = await screen.findByRole('region', { name: 'Worth doing next' });
+    expect(within(region).getByText('You are on pace this week.')).toBeTruthy();
+    expect(within(region).queryByRole('list')).toBeNull();
+  });
+
+  it('does not render suggestions when there are no active activities', async () => {
+    await completeOnboarding(false);
+    render(<HubrisProvider><App surface="popup" /></HubrisProvider>);
+
+    await screen.findByText('Add your first activity');
+    expect(screen.queryByRole('region', { name: 'Worth doing next' })).toBeNull();
+    expect(screen.queryByText('You are on pace this week.')).toBeNull();
   });
 
   it('validates the activity form fields inline and displays repository ValidationError messages', async () => {

@@ -23,7 +23,7 @@ function setup(overrides: Partial<HubrisState> = {}, actionOverrides: Partial<Hu
   const state: HubrisState = {
     status: 'ready', error: null, now, activities: [activity], logs: [log], onboardingComplete: true,
     report: computeWeeklyReport([activity], [log], now), trend: computeWeeklyTrend([activity], [log], now),
-    heatmap: generateLogHeatmap([log], 84, getWeekBounds(now).end), actions, ...overrides,
+    suggestions: [], heatmap: generateLogHeatmap([log], 84, getWeekBounds(now).end), actions, ...overrides,
   };
   render(<HubrisContext.Provider value={state}><App surface="popup" /></HubrisContext.Provider>);
   return actions;
