@@ -7,11 +7,12 @@ import { HubrisContext, type HubrisState } from '../../state/useHubris';
 import { ValidationError } from '../../storage/validation';
 import { App } from '../App';
 import { SegmentedControl } from '../components/21st/segmented-control';
+import { TrendsScreen } from '../screens/TrendsScreen';
 
 const now = new Date(2026, 10, 18, 12);
 const activity = { id: 'a', name: 'Practice', category: 'career', timesPerWeek: 3, importance: 'high', archived: false, createdAt: now.toISOString(), updatedAt: now.toISOString() } satisfies HubrisState['activities'][number];
 const log = { id: 'l', activityId: 'a', loggedAt: now.toISOString() };
-function setup(overrides: Partial<HubrisState> = {}, actionOverrides: Partial<HubrisState['actions']> = {}) {
+function makeState(overrides: Partial<HubrisState> = {}, actionOverrides: Partial<HubrisState['actions']> = {}) {
   const actions: HubrisState['actions'] = {
     createActivity: vi.fn(async () => activity), updateActivity: vi.fn(async () => activity),
     setArchived: vi.fn(async () => activity), deleteActivity: vi.fn(async () => {}),
@@ -25,6 +26,10 @@ function setup(overrides: Partial<HubrisState> = {}, actionOverrides: Partial<Hu
     report: computeWeeklyReport([activity], [log], now), trend: computeWeeklyTrend([activity], [log], now),
     suggestions: [], heatmap: generateLogHeatmap([log], 84, getWeekBounds(now).end), actions, ...overrides,
   };
+  return { actions, state };
+}
+function setup(overrides: Partial<HubrisState> = {}, actionOverrides: Partial<HubrisState['actions']> = {}) {
+  const { actions, state } = makeState(overrides, actionOverrides);
   render(<HubrisContext.Provider value={state}><App surface="popup" /></HubrisContext.Provider>);
   return actions;
 }
@@ -128,6 +133,38 @@ it('gives the heatmap one tab stop and moves focus between days with arrow keys'
 
   expect(within(heatmap).getByRole('button', { name: 'Wed, Nov 18: 1 log' })).toHaveFocus();
   expect(cells.filter((cell) => cell.tabIndex === 0)).toHaveLength(1);
+});
+
+it('reads the active heatmap day from the latest heatmap data', () => {
+  function HeatmapHarness() {
+    const [heatmap, setHeatmap] = useState(() => generateLogHeatmap([log], 84, getWeekBounds(now).end));
+    const { state } = makeState({ heatmap });
+    return (
+      <>
+        <button
+          onClick={() => setHeatmap((current) => current.map((cell) =>
+            cell.date === '2026-11-18' ? { ...cell, logCount: 2, intensity: 2 } : cell
+          ))}
+        >
+          Update heatmap
+        </button>
+        <button onClick={() => setHeatmap((current) => current.filter((cell) => cell.date !== '2026-11-18'))}>
+          Remove active day
+        </button>
+        <HubrisContext.Provider value={state}><TrendsScreen /></HubrisContext.Provider>
+      </>
+    );
+  }
+
+  render(<HeatmapHarness />);
+  fireEvent.focus(screen.getByRole('button', { name: 'Wed, Nov 18: 1 log' }));
+  expect(screen.getByText('Wed, Nov 18: 1 log')).toBeTruthy();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Update heatmap' }));
+  expect(screen.getByText('Wed, Nov 18: 2 logs')).toBeTruthy();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Remove active day' }));
+  expect(screen.getByText('Hover or focus a day')).toBeTruthy();
 });
 
 it('resets the file input so the same backup can be chosen again', async () => {

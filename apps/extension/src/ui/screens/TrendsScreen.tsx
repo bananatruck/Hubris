@@ -33,7 +33,7 @@ function parseLocalWeekday(dateKey: string): number {
 
 export function TrendsScreen() {
   const { logs, report, trend, heatmap, now } = useHubris();
-  const [activeCell, setActiveCell] = useState<DayHeatmapCell | null>(null);
+  const [activeDate, setActiveDate] = useState<string | null>(null);
   const todayKey = formatDateKey(now);
   const [tabStopDate, setTabStopDate] = useState<string | null>(() =>
     heatmap.find((cell) => cell.date === todayKey)?.date
@@ -41,6 +41,12 @@ export function TrendsScreen() {
       ?? null,
   );
   const heatmapButtons = useRef(new Map<string, HTMLButtonElement>());
+  const activeCell = activeDate === null
+    ? null
+    : heatmap.find((cell) => cell.date === activeDate) ?? null;
+  const effectiveTabStopDate = heatmap.some((cell) => cell.date === tabStopDate)
+    ? tabStopDate
+    : heatmap.find((cell) => cell.date === todayKey)?.date ?? heatmap[0]?.date ?? null;
 
   const currentWeekPoint = trend[trend.length - 1];
   const previousWeekPoint = trend.length >= 2 ? trend[trend.length - 2] : undefined;
@@ -288,14 +294,14 @@ export function TrendsScreen() {
                         type="button"
                         title={label}
                         aria-label={label}
-                        tabIndex={cell.date === tabStopDate ? 0 : -1}
-                        onMouseEnter={() => setActiveCell(upcoming ? null : cell)}
+                        tabIndex={cell.date === effectiveTabStopDate ? 0 : -1}
+                        onMouseEnter={() => setActiveDate(upcoming ? null : cell.date)}
                         onFocus={() => {
                           setTabStopDate(cell.date);
-                          setActiveCell(upcoming ? null : cell);
+                          setActiveDate(upcoming ? null : cell.date);
                         }}
-                        onMouseLeave={() => setActiveCell(null)}
-                        onBlur={() => setActiveCell(null)}
+                        onMouseLeave={() => setActiveDate(null)}
+                        onBlur={() => setActiveDate(null)}
                         onKeyDown={(event) => handleHeatmapKeyDown(event, cell.date)}
                         className={`aspect-square w-full rounded-[3px] border transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft ${upcoming ? 'bg-transparent border-line' : INTENSITY_STYLES[cell.intensity]}`}
                       />
