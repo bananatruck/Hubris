@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  extension:
+    name: Core and extension
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # The Expo app is not part of this pipeline yet, so its heavy native toolchain is skipped.
+      - name: Install
+        run: pnpm install --frozen-lockfile --filter '!@hubris/mobile'
+
+      - name: Lint
+        run: pnpm turbo run lint --filter='!@hubris/mobile'
+
+      - name: Type-check
+        run: pnpm turbo run type-check --filter='!@hubris/mobile'
+
+      - name: Unit tests
+        run: pnpm turbo run test --filter='!@hubris/mobile'
+
+      - name: Build
+        run: pnpm turbo run build --filter='!@hubris/mobile'
+
+      - name: Install Chromium for the end-to-end check
+        working-directory: apps/extension
+        run: pnpm exec playwright-core install --with-deps chromium
+
+      - name: Load the unpacked extension in Chromium
+        working-directory: apps/extension
+        run: pnpm e2e
+
+      - name: Package the extension zip
+        working-directory: apps/extension
+        run: pnpm package
+
+      - name: Upload the extension zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: hubris-extension
+          path: apps/extension/release/*.zip
+          if-no-files-found: error
