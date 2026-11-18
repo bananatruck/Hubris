@@ -257,6 +257,30 @@ it('resets the file input so the same backup can be chosen again', async () => {
   expect(screen.getByRole('button', { name: 'Confirm import' })).toBeTruthy();
 });
 
+it('locks import controls while running and keeps a failed file for retry', async () => {
+  let rejectImport: (reason: unknown) => void = () => {};
+  const importBackup = vi.fn<HubrisState['actions']['importBackup']>(() => new Promise((_, reject) => {
+    rejectImport = reject;
+  }));
+  setup({}, { importBackup });
+  fireEvent.click(screen.getByRole('tab', { name: 'Settings' }));
+  const input = screen.getByLabelText('Import backup file');
+  fireEvent.change(input, { target: { files: [new File(['{}'], 'first.json')] } });
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm import' }));
+
+  expect(input).toBeDisabled();
+  expect(screen.getByRole('radio', { name: 'Replace' })).toBeDisabled();
+  expect(screen.getByRole('radio', { name: 'Merge' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+
+  rejectImport(new ValidationError('Invalid backup.'));
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Invalid backup.');
+  expect(input).toBeEnabled();
+  expect(screen.getAllByText('first.json')).toHaveLength(2);
+  expect(screen.getByRole('button', { name: 'Confirm import' })).toBeEnabled();
+});
+
 it('waits for the window id and catches side panel rejection within the click gesture', async () => {
   let onWindow: (win: { id: number }) => void = () => {};
   const open = vi.fn(() => Promise.reject(new Error('Panel unavailable.')));

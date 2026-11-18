@@ -223,12 +223,14 @@ export function SettingsScreen() {
               value={importMode}
               onChange={setImportMode}
               layoutId="settings-import-mode"
+              disabled={importing}
             />
 
             <div className="space-y-2">
               <label
                 htmlFor={fileInputId}
-                className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-line bg-raised/60 px-3 py-2 text-xs font-medium text-text hover:bg-raised"
+                aria-disabled={importing || undefined}
+                className={`flex items-center justify-center gap-2 rounded-lg border border-dashed border-line bg-raised/60 px-3 py-2 text-xs font-medium text-text ${importing ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-raised'}`}
               >
                 <Upload className="h-3.5 w-3.5 text-accent-soft" aria-hidden="true" />
                 <span>{selectedFile ? selectedFile.name : 'Choose backup JSON file'}</span>
@@ -239,6 +241,7 @@ export function SettingsScreen() {
                 aria-label="Import backup file"
                 type="file"
                 accept=".json,application/json"
+                disabled={importing}
                 onChange={handleFileChange}
                 className="sr-only"
               />
@@ -259,6 +262,7 @@ export function SettingsScreen() {
                   <Button
                     variant="secondary"
                     size="sm"
+                    disabled={importing}
                     onClick={() => { setSelectedFile(null); fileInput.current?.focus(); }}
                   >
                     Cancel
