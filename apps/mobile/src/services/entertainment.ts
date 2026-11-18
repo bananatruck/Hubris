@@ -9,7 +9,9 @@ export interface EntertainmentItem {
 }
 
 // OMDb API (Free with key)
-const OMDB_API_KEY = '21b957dc';
+// Read at build time from apps/mobile/.env.local (see .env.example); Expo inlines EXPO_PUBLIC_ variables.
+// The key ships inside the app bundle either way, so treat it as public and keep it rotated.
+const OMDB_API_KEY = process.env.EXPO_PUBLIC_OMDB_API_KEY ?? '';
 const OMDB_BASE_URL = 'https://www.omdbapi.com';
 
 // Jikan API (Free)
