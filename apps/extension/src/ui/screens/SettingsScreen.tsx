@@ -250,6 +250,11 @@ export function SettingsScreen() {
                   Confirm importing <strong className="font-semibold">{selectedFile.name}</strong> in{' '}
                   <strong className="font-semibold">{importMode}</strong> mode?
                 </p>
+                {importMode === 'merge' && (
+                  <p className="text-xs text-muted">
+                    Merge adds everything in the file that is missing here, including items you deleted after this backup was made.
+                  </p>
+                )}
                 <div className="flex justify-end gap-2">
                   <Button
                     variant="secondary"

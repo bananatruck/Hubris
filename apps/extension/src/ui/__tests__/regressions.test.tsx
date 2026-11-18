@@ -182,3 +182,15 @@ it.each(['Start blank', 'Start with an example'])('locks earlier onboarding step
   expect(screen.queryByRole('button', { name: /Back/ })).toBeNull();
   expect(actions.completeOnboarding).toHaveBeenCalledTimes(1);
 });
+
+it('explains that Merge restores deleted items only in Merge import confirmation', () => {
+  setup();
+  fireEvent.click(screen.getByRole('tab', { name: 'Settings' }));
+  const copy = 'Merge adds everything in the file that is missing here, including items you deleted after this backup was made.';
+  fireEvent.click(screen.getByRole('radio', { name: 'Merge' }));
+  expect(screen.queryByText(copy)).toBeNull();
+  fireEvent.change(screen.getByLabelText('Import backup file'), { target: { files: [new File(['{}'], 'backup.json')] } });
+  expect(screen.getByText(copy)).toBeTruthy();
+  fireEvent.click(screen.getByRole('radio', { name: 'Replace' }));
+  expect(screen.queryByText(copy)).toBeNull();
+});
