@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { ActivityLog, DayHeatmapCell, TrackedActivity, WeeklyReport, WeeklyTrendPoint } from '@hubris/types';
+import type { ActivityLog, DayHeatmapCell, Suggestion, TrackedActivity, WeeklyReport, WeeklyTrendPoint } from '@hubris/types';
 import type { ActivityPatch, CreateActivityInput } from '../storage/repository';
 
 export interface HubrisState {
@@ -9,6 +9,7 @@ export interface HubrisState {
   activities: TrackedActivity[];
   logs: ActivityLog[];
   report: WeeklyReport;
+  suggestions: Suggestion[];
   trend: WeeklyTrendPoint[];
   heatmap: DayHeatmapCell[];
   onboardingComplete: boolean;
