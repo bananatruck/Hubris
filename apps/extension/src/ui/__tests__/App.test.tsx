@@ -1,10 +1,13 @@
+import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { HubrisProvider } from '../../state/HubrisProvider';
 import {
   completeOnboarding,
+  addLog,
   createActivity,
   eraseAll,
+  listActivities,
   ValidationError,
 } from '../../storage/repository';
 import { App } from '../App';
@@ -178,4 +181,47 @@ describe('Hubris UI', () => {
       importance: 'low',
     });
   });
+});
+
+
+it.each(['Edit Leetcode', 'Delete Leetcode', 'Erase all data', 'Delete log for Leetcode'])('returns focus to %s after cancel', async (name) => {
+  await completeOnboarding(true);
+  const activities = await listActivities();
+  const example = activities.find((activity) => activity.name === 'Leetcode');
+  if (!example) throw new Error('Missing example activity');
+  await addLog(example.id);
+  render(<HubrisProvider><App surface="popup" /></HubrisProvider>);
+  fireEvent.click(await screen.findByRole('tab', { name: name.startsWith('Delete log') ? 'History' : 'Settings' }));
+  const opener = screen.getByRole('button', { name });
+  opener.focus();
+  fireEvent.click(opener);
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  await waitFor(() => expect(opener).toHaveFocus());
+});
+
+it.each(['activity', 'log'])('returns focus to a surviving control after deleting a %s', async (kind) => {
+  await completeOnboarding(false);
+  const activity = await createActivity({ name: 'Practice', category: 'career', timesPerWeek: 1, importance: 'high' });
+  await addLog(activity.id);
+  render(<HubrisProvider><App surface="popup" /></HubrisProvider>);
+  fireEvent.click(await screen.findByRole('tab', { name: kind === 'activity' ? 'Settings' : 'History' }));
+  const opener = screen.getByRole('button', { name: kind === 'activity' ? 'Delete Practice' : 'Delete log for Practice' });
+  opener.focus();
+  fireEvent.click(opener);
+  fireEvent.click(screen.getByRole('button', { name: kind === 'activity' ? 'Delete activity and logs' : 'Confirm delete' }));
+  await waitFor(() => expect(opener).not.toBeInTheDocument());
+  await waitFor(() => expect(kind === 'activity' ? screen.getByRole('button', { name: 'Add activity' }) : screen.getByRole('heading', { name: 'Activity history' })).toHaveFocus());
+});
+
+it('returns focus to the file control when cancelling import confirmation', async () => {
+  await completeOnboarding(false);
+  render(<HubrisProvider><App surface="popup" /></HubrisProvider>);
+  fireEvent.click(await screen.findByRole('tab', { name: 'Settings' }));
+  const input = screen.getByLabelText('Import backup file');
+  input.focus();
+  fireEvent.change(input, { target: { files: [new File(['{}'], 'backup.json')] } });
+  const cancel = screen.getByRole('button', { name: 'Cancel' });
+  cancel.focus();
+  fireEvent.click(cancel);
+  expect(input).toHaveFocus();
 });

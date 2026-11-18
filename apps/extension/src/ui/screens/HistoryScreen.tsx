@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { formatDateKey } from '@hubris/core';
 import type { ActivityLog, ScoredCategory } from '@hubris/types';
@@ -25,6 +25,7 @@ const FILTER_OPTIONS: readonly SegmentedOption<CategoryFilter>[] = [
 export function HistoryScreen() {
   const { activities, logs, now, actions } = useHubris();
   const deletion = useDialogAction();
+  const heading = useRef<HTMLHeadingElement>(null);
   const [filter, setFilter] = useState<CategoryFilter>('all');
   const [logToDelete, setLogToDelete] = useState<ActivityLog | null>(null);
 
@@ -62,7 +63,7 @@ export function HistoryScreen() {
   return (
     <div className="space-y-3.5">
       <div className="flex items-center justify-between">
-        <h2 className="font-display text-base font-semibold text-text">
+        <h2 ref={heading} tabIndex={-1} className="font-display text-base font-semibold text-text">
           Activity history
         </h2>
         <span className="text-xs text-muted tabular-nums">
@@ -152,6 +153,7 @@ export function HistoryScreen() {
         }}
       >
         <DialogContent
+          returnFocusFallback={() => heading.current}
           title="Delete log entry"
           description="Removing this log will recalculate your weekly score immediately."
         >

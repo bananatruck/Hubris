@@ -1,7 +1,7 @@
 // 21st.dev - https://21st.dev/shadcn/dialog
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
-import type { ComponentPropsWithoutRef, ReactNode } from 'react';
+import { useRef, type ComponentPropsWithoutRef, type ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 
 export const Dialog = DialogPrimitive.Root;
@@ -13,6 +13,7 @@ export interface DialogContentProps
   title: string;
   description?: string;
   children: ReactNode;
+  returnFocusFallback?: () => HTMLElement | null;
 }
 
 export function DialogContent({
@@ -20,8 +21,12 @@ export function DialogContent({
   description,
   children,
   className,
+  returnFocusFallback,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
   ...props
 }: DialogContentProps) {
+  const opener = useRef<HTMLElement | null>(null);
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-ink/80 backdrop-blur-xs" />
@@ -31,6 +36,19 @@ export function DialogContent({
           className,
         )}
         {...props}
+        onOpenAutoFocus={(event) => {
+          opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+          onOpenAutoFocus?.(event);
+        }}
+        onCloseAutoFocus={(event) => {
+          onCloseAutoFocus?.(event);
+          if (event.defaultPrevented) return;
+          const target = opener.current?.isConnected ? opener.current : returnFocusFallback?.();
+          if (target) {
+            event.preventDefault();
+            target.focus();
+          }
+        }}
       >
         <div className="flex items-start justify-between gap-2 pb-2">
           <div className="space-y-1">
