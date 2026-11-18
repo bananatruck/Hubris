@@ -43,3 +43,4 @@ coverage/
 test-results/
 playwright-report/
 apps/extension/.e2e-profile/
+design/icon/out/
