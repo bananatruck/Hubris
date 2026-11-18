@@ -1,8 +1,28 @@
-import { afterEach, expect, it, vi } from 'vitest';
-import { getBadgeState } from './badge';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { getBadgeState, getNextMondayTime } from './badge';
 import { addLog, createActivity, eraseAll } from '../storage/repository';
 
 afterEach(() => { vi.unstubAllGlobals(); });
+describe('getNextMondayTime', () => {
+  const originalTimezone = process.env.TZ;
+  beforeAll(() => { process.env.TZ = 'America/New_York'; });
+  afterAll(() => {
+    if (originalTimezone === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTimezone;
+  });
+
+  it.each([
+    ['the Wednesday before spring-forward', [2026, 2, 4, 12], [2026, 2, 9, 0]],
+    ['a Monday at midnight', [2026, 2, 9, 0], [2026, 2, 16, 0]],
+  ] as const)('returns the next local Monday midnight from %s', (_label, referenceParts, expectedParts) => {
+    const reference = new Date(referenceParts[0], referenceParts[1], referenceParts[2], referenceParts[3]);
+    const expected = new Date(expectedParts[0], expectedParts[1], expectedParts[2], expectedParts[3]);
+    const original = reference.getTime();
+    expect(getNextMondayTime(reference)).toBe(expected.getTime());
+    expect(reference.getTime()).toBe(original);
+  });
+});
+
 it.each([
   [80, 'On track'], [79.9, 'On track'], [50, 'Catching up'], [49.9, 'Catching up'],
 ])('formats score %s and threshold status', (score, status) => {
@@ -44,6 +64,9 @@ it('registers worker events and updates the real report through Chrome action AP
     expect(chromeMock.action.setTitle).toHaveBeenCalledWith({ title: 'Hubris - this week: 36 (Needs love)' });
     expect(chromeMock.alarms.get).toHaveBeenCalledWith('hubris/refresh-badge');
     expect(chromeMock.alarms.create).toHaveBeenCalledWith('hubris/refresh-badge', { periodInMinutes: 15 });
+    expect(chromeMock.alarms.create).toHaveBeenCalledWith('hubris/refresh-badge-monday', {
+      when: new Date(2026, 10, 23).getTime(),
+    });
     const startupInit = chromeMock.runtime.onStartup.addListener.mock.calls[0]?.[0] as () => void;
     chromeMock.alarms.get.mockResolvedValue({ name: 'hubris/refresh-badge' });
     chromeMock.alarms.create.mockClear();
@@ -53,7 +76,18 @@ it('registers worker events and updates the real report through Chrome action AP
     startupInit();
     // refresh() runs after the alarm check, so one more badge update proves the check finished.
     await vi.waitFor(() => expect(chromeMock.action.setBadgeText).toHaveBeenCalledTimes(badgeUpdatesBefore + 1));
-    expect(chromeMock.alarms.create).not.toHaveBeenCalled();
+    expect(chromeMock.alarms.create).toHaveBeenCalledOnce();
+    expect(chromeMock.alarms.create).toHaveBeenCalledWith('hubris/refresh-badge-monday', {
+      when: new Date(2026, 10, 23).getTime(),
+    });
+    const alarmListener = chromeMock.alarms.onAlarm.addListener.mock.calls[0]?.[0] as
+      (alarm: { name: string }) => void;
+    chromeMock.alarms.create.mockClear();
+    alarmListener({ name: 'hubris/refresh-badge-monday' });
+    await vi.waitFor(() => expect(chromeMock.action.setBadgeText).toHaveBeenCalledTimes(badgeUpdatesBefore + 2));
+    expect(chromeMock.alarms.create).toHaveBeenCalledWith('hubris/refresh-badge-monday', {
+      when: new Date(2026, 10, 23).getTime(),
+    });
     expect(chromeMock.runtime.onInstalled.addListener).toHaveBeenCalledOnce();
     expect(chromeMock.runtime.onStartup.addListener).toHaveBeenCalledOnce();
     expect(chromeMock.runtime.onMessage.addListener).toHaveBeenCalledOnce();

@@ -1,5 +1,13 @@
 import { getStatusDisplayLabel, getStatusLabel } from '@hubris/core';
 
+export function getNextMondayTime(referenceDate: Date = new Date()) {
+  const nextMonday = new Date(referenceDate);
+  const daysUntilMonday = (8 - nextMonday.getDay()) % 7 || 7;
+  nextMonday.setDate(nextMonday.getDate() + daysUntilMonday);
+  nextMonday.setHours(0, 0, 0, 0);
+  return nextMonday.getTime();
+}
+
 export function getBadgeState(score: number, hasActiveActivities: boolean) {
   const rounded = Math.round(score);
   const display = getStatusDisplayLabel(getStatusLabel(rounded));
