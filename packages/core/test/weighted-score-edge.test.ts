@@ -13,6 +13,21 @@ describe('weekly scoring boundaries', () => {
         expect(() => activityScore(done, goal, cap)).toThrow(RangeError);
     });
 
+    it('orders rows by importance (High first), then by name, whatever the storage order', () => {
+        const base: TrackedActivity = {
+            id: '', name: '', category: 'career', timesPerWeek: 1, importance: 'low', archived: false,
+            createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+        };
+        const activities = [
+            { ...base, id: 'z1', name: 'Writing', importance: 'low' as const },
+            { ...base, id: 'a1', name: 'classes', importance: 'medium' as const },
+            { ...base, id: 'm1', name: 'Leetcode', importance: 'high' as const },
+            { ...base, id: 'b1', name: 'Algebra', importance: 'medium' as const },
+        ];
+        const rows = computeWeeklyReport(activities, [], new Date(2026, 10, 18)).categories.career.activities;
+        expect(rows.map((row) => row.name)).toEqual(['Leetcode', 'Algebra', 'classes', 'Writing']);
+    });
+
     it('rejects a negative done count', () => {
         expect(() => activityScore(-1, 5)).toThrow(RangeError);
     });

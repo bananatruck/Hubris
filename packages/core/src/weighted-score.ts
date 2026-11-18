@@ -94,6 +94,14 @@ export function getWeekBounds(referenceDate: Date = new Date()): { start: Date; 
     return getPeriodBoundaries('weekly', referenceDate);
 }
 
+const IMPORTANCE_ORDER: Readonly<Record<Importance, number>> = { high: 0, medium: 1, low: 2 };
+
+/** Stable display order: High first, then Medium, then Low, then by name (case-insensitive). */
+function compareRows(a: { importance: Importance; name: string }, b: { importance: Importance; name: string }): number {
+    return IMPORTANCE_ORDER[a.importance] - IMPORTANCE_ORDER[b.importance]
+        || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+}
+
 export function computeWeeklyReport(
     activities: TrackedActivity[],
     logs: ActivityLog[],
@@ -120,7 +128,8 @@ export function computeWeeklyReport(
                     done,
                     score: activityScore(done, activity.timesPerWeek),
                 };
-            });
+            })
+            .sort(compareRows);
         return { category, score: categoryScore(rows), activities: rows };
     }
     const categories = {
