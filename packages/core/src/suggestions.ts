@@ -12,6 +12,12 @@ import {
 } from '@hubris/types';
 import { calculateFrequencyScore, getPeriodBoundaries } from './scoring';
 
+/** Whether remaining sessions exceed the whole or partial days left. */
+export function isBehindPace(remaining: number, periodEnd: Date, referenceDate: Date): boolean {
+    const daysRemaining = (periodEnd.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24);
+    return remaining > Math.ceil(daysRemaining);
+}
+
 /**
  * Check if an activity is at risk of missing its target.
  */
@@ -25,14 +31,8 @@ export function isAtRisk(
     const { end } = getPeriodBoundaries(activity.frequencyRate, referenceDate);
     const { periodDays } = FREQUENCY_TARGETS[activity.frequencyRate];
 
-    // Calculate remaining time in period
-    const msRemaining = end.getTime() - referenceDate.getTime();
-    const daysRemaining = msRemaining / (1000 * 60 * 60 * 24);
-
-    // Activity is at risk if remaining sessions > remaining days
-    // (for weekly+) or if less than 25% time left with < 50% completion
     if (periodDays >= 7) {
-        return score.remaining > Math.ceil(daysRemaining);
+        return isBehindPace(score.remaining, end, referenceDate);
     }
 
     // For daily, at risk if not done today

@@ -91,6 +91,16 @@ With Career and Hobbies from Example B and no Health activities, the overall sco
 `apps/extension/src/state/` holds the React hook that the UI uses to read data and run actions.
 `apps/extension/src/ui/` holds the screens and components for the popup and the side panel.
 
+## Suggestions
+
+`generateWeeklySuggestions` uses the weekly report's done counts and excludes archived activities, activities not yet created, and future logs.
+An activity is at risk when its remaining sessions exceed the ceiling of fractional days until Sunday ends, using the same pace helper as the existing engine.
+At most two at-risk suggestions are selected by lowest score, with priority `10 - floor(score / 10)`.
+One unsuggested activity with a goal of seven per week, an unmet goal, and no log today gets a streak protector at priority 8.
+If nothing at all was logged today, the lowest-scoring unsuggested activity below 50 gets a light-day suggestion at priority 5.
+Today means the local calendar day, and only logs through now count.
+Suggestions use quick-log actions and return at most three items, highest priority first.
+
 ## Test plan
 
 `packages/core` has Vitest unit tests for Examples A to D, the cap, the week bounds, and the trend.
