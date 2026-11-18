@@ -368,7 +368,9 @@ export function SettingsScreen() {
               submitLabel="Save changes"
               onCancel={() => setEditingActivity(null)}
               onSubmit={(patch) => actions.updateActivity(editingActivity.id, patch)}
-              onSuccess={() => setEditingActivity(null)}
+              onSuccess={() => setEditingActivity((current) =>
+                current?.id === editingActivity.id ? null : current
+              )}
             />
           )}
         </DialogContent>

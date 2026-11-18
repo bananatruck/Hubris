@@ -154,6 +154,28 @@ it.each(['activity', 'log', 'erase'] as const)('keeps the %s dialog open while p
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 });
 
+it('does not close a newer edit dialog when an older save completes', async () => {
+  let resolveUpdate: (value: HubrisState['activities'][number]) => void = () => {};
+  const updateActivity = vi.fn<HubrisState['actions']['updateActivity']>(() => new Promise((resolve) => {
+    resolveUpdate = resolve;
+  }));
+  const reading = { ...activity, id: 'b', name: 'Reading' };
+  setup({ activities: [activity, reading] }, { updateActivity });
+  fireEvent.click(screen.getByRole('tab', { name: 'Settings' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Edit Practice' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+  fireEvent.click(screen.getByRole('button', { name: 'Edit Reading' }));
+  expect(screen.getByLabelText('Activity name')).toHaveValue('Reading');
+  resolveUpdate(activity);
+
+  await waitFor(() => expect(updateActivity).toHaveBeenCalledTimes(1));
+  expect(screen.getByRole('dialog', { name: 'Edit activity' })).toBeTruthy();
+  expect(screen.getByLabelText('Activity name')).toHaveValue('Reading');
+});
+
 it('shows onboarding failure below the choices and permits retry', async () => {
   const completeOnboarding = vi.fn().mockRejectedValueOnce(new Error('Storage is full.')).mockResolvedValue(undefined);
   setup({ onboardingComplete: false }, { completeOnboarding });
