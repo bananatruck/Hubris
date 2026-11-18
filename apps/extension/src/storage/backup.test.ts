@@ -1,4 +1,4 @@
-import { beforeEach, expect, it } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import type { HubrisExport } from '@hubris/types';
 import { createActivity, addLog, eraseAll, listActivities, listLogs, getMeta, updateActivity } from './repository';
 import { createBackupDownload, exportData, importData, parseBackup } from './backup';
@@ -67,4 +67,21 @@ it('keeps a local edit after merging a backup from a device whose clock ran ahea
 
   await importData(backup, 'merge');
   expect((await listActivities())[0].name).toBe('Leetcode edited here');
+});
+
+it('preserves the original put error and rolls back an aborted replace import', async () => {
+  const previous = await fixture();
+  const failure = new Error('Put failed.');
+  const put = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementationOnce(function (this: IDBObjectStore) {
+    this.transaction.abort();
+    throw failure;
+  });
+  try {
+    await expect(importData(previous, 'replace')).rejects.toBe(failure);
+  } finally {
+    put.mockRestore();
+  }
+  expect(await listActivities()).toEqual(previous.activities);
+  expect(await listLogs()).toEqual(previous.logs);
+  expect(await getMeta('onboardingComplete')).toBeUndefined();
 });
