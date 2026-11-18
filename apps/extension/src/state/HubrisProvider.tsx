@@ -14,6 +14,7 @@ export function HubrisProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
   const generation = useRef({ version: 0 });
+  const hasLoaded = useRef(false);
 
   const reload = useCallback(async () => {
     const request = ++generation.current.version;
@@ -21,13 +22,14 @@ export function HubrisProvider({ children }: { children: ReactNode }) {
       const data = await repository.readSnapshot();
       if (request !== generation.current.version) return;
       setSnapshot(data);
+      hasLoaded.current = true;
       setNow(new Date());
       setError(null);
       setStatus('ready');
     } catch (cause) {
       if (request !== generation.current.version) return;
       setError(cause instanceof Error ? cause.message : 'Could not read local data. Try again.');
-      setStatus('error');
+      setStatus(hasLoaded.current ? 'ready' : 'error');
     }
   }, []);
 

@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { HubrisProvider } from './HubrisProvider';
 import { useHubris } from './useHubris';
 import { createActivity, eraseAll } from '../storage/repository';
+import * as repository from '../storage/repository';
 
 function Consumer() {
   const state = useHubris();
@@ -12,12 +13,17 @@ function Consumer() {
     <p>Logs: {state.logs.length}</p>
     <p>Trend: {state.trend.length}</p>
     <p>Heatmap: {state.heatmap.length}</p>
+    <p>Error: {state.error ?? 'none'}</p>
     <button onClick={() => { const activity = state.activities[0]; if (activity) void state.actions.logActivity(activity.id); }}>Log</button>
     <button onClick={() => { const log = state.logs[0]; if (log) void state.actions.undoLog(log); }}>Undo</button>
+    <button onClick={() => void state.actions.retry()}>Retry</button>
   </>;
 }
 beforeEach(eraseAll);
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 it('loads stored activities, logs and undoes an activity, and recomputes the report', async () => {
   await createActivity({ name: 'Practice', category: 'career', timesPerWeek: 1, importance: 'high' });
   render(<HubrisProvider><Consumer /></HubrisProvider>);
@@ -30,6 +36,20 @@ it('loads stored activities, logs and undoes an activity, and recomputes the rep
   expect(screen.getByText('Logs: 1')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
   await waitFor(() => { expect(screen.getByText('Score: 0')).toBeTruthy(); });
+  expect(screen.getByText('Logs: 0')).toBeTruthy();
+});
+
+it('keeps loaded data ready when a refresh fails', async () => {
+  await createActivity({ name: 'Practice', category: 'career', timesPerWeek: 1, importance: 'high' });
+  const readSnapshot = vi.spyOn(repository, 'readSnapshot');
+  render(<HubrisProvider><Consumer /></HubrisProvider>);
+  await screen.findByText('Status: ready');
+
+  readSnapshot.mockRejectedValueOnce(new Error('Refresh failed.'));
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+  await screen.findByText('Error: Refresh failed.');
+  expect(screen.getByText('Status: ready')).toBeTruthy();
   expect(screen.getByText('Logs: 0')).toBeTruthy();
 });
 
