@@ -11,7 +11,7 @@ Hubris compares what you meant to do this week with what you did, and turns it i
 
 - **Chrome extension** (`apps/extension`): working and tested. Log activities, see this week's score, trends, and history, and back up your data. Loads unpacked in Chrome 116 or newer.
 - **Scoring core** (`packages/core`): the weekly weighted score from the spec is implemented and unit tested with hand-checked worked examples.
-- **Mobile app** (`apps/mobile`): Expo prototype, not part of the extension work and not covered by CI yet.
+- **Mobile app** (`apps/mobile`): Expo prototype, not part of the extension work and not covered by CI yet. Movie search reads its OMDb key from `EXPO_PUBLIC_OMDB_API_KEY` in `apps/mobile/.env.local` (see `apps/mobile/.env.example`); Expo builds that value into the app, so treat it as public.
 - **Entertainment**: planned as a separate catalog with its own score; not built yet (see "What is next").
 
 ## Tech Stack
@@ -55,6 +55,7 @@ All the weights and the two "empty group" policies live in `packages/core/src/we
 ## What the extension does
 
 - **Today**: the overall score in the middle of three category rings, the status (On track at 80 and above, Catching up from 50 to 79, Needs love below 50), each category's score, and one-tap logging with undo.
+- **Worth doing next**: up to three suggestions from `packages/core`: activities that cannot reach their goal at the current pace, a daily habit not logged yet today, or, on a day with nothing logged, the activity that would help most. Each has its own log button.
 - **Trends**: an 8-week score chart split by category, the change against last week, and a 12-week activity heatmap.
 - **History**: every log grouped by day, with filtering and deletion.
 - **Settings**: add, edit, archive, restore, and delete activities; export a JSON backup, import one (replace or merge), or erase everything.
@@ -128,9 +129,9 @@ hubris/
 |---|---|---|---|
 | ![Today](docs/screenshots/popup-today.png) | ![Trends](docs/screenshots/popup-trends.png) | ![History](docs/screenshots/popup-history.png) | ![Settings](docs/screenshots/popup-settings.png) |
 
-| First run | Side panel | Side panel, wide |
-|---|---|---|
-| ![Onboarding](docs/screenshots/popup-onboarding.png) | ![Side panel](docs/screenshots/sidepanel.png) | ![Side panel, wide](docs/screenshots/sidepanel-desktop.png) |
+| First run | Suggestions | Side panel | Side panel, wide |
+|---|---|---|---|
+| ![Onboarding](docs/screenshots/popup-onboarding.png) | ![Suggestions](docs/screenshots/popup-suggestions.png) | ![Side panel](docs/screenshots/sidepanel.png) | ![Side panel, wide](docs/screenshots/sidepanel-desktop.png) |
 
 The screenshots are taken by `pnpm e2e` from the real built extension with demo data.
 
@@ -146,5 +147,4 @@ The screenshots are taken by `pnpm e2e` from the real built extension with demo 
 ## What is next
 
 - **Entertainment**: a separate catalog (movies, TV, anime, manga, books) with its own goals and score, kept out of the main score. The code marks where it plugs in with `ENTERTAINMENT_EXTENSION_POINT`.
-- **Smart suggestions in the extension**: `packages/core` already has a suggestions engine; the extension does not show suggestions yet.
 - **Mobile on the shared core**: move the Expo app onto `packages/core` scoring so both apps give the same numbers.
