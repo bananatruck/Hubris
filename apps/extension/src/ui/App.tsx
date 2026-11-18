@@ -53,10 +53,6 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
   const [keepOnboardingForStep3, setKeepOnboardingForStep3] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
   const [windowId, setWindowId] = useState<number | null>(null);
-  const [isWideSidePanel, setIsWideSidePanel] = useState<boolean>(() => {
-    if (surface !== 'sidepanel' || typeof window === 'undefined') return false;
-    return window.innerWidth >= 640;
-  });
 
   const canShowSidePanelButton =
     surface === 'popup' &&
@@ -80,16 +76,6 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
       active = false;
     };
   }, [canShowSidePanelButton]);
-
-  useEffect(() => {
-    if (surface !== 'sidepanel' || typeof window === 'undefined') return;
-    const handleResize = () => {
-      setIsWideSidePanel(window.innerWidth >= 640);
-    };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [surface]);
 
   const notify = useCallback((notification: Notification) => {
     setToast({ ...notification, id: crypto.randomUUID() });
@@ -128,6 +114,10 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
 
   const weekRangeText = formatWeekRange(report.weekStart, report.weekEnd);
   const showOnboarding = !onboardingComplete || keepOnboardingForStep3;
+  const twoColumnClass = surface === 'sidepanel'
+    ? 'sm:grid sm:grid-cols-2 sm:gap-5 sm:items-start'
+    : '';
+  const wideOnlyClass = surface === 'sidepanel' ? 'hidden sm:block' : 'hidden';
 
   return (
     <NotificationContext.Provider value={notify}>
@@ -228,25 +218,21 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
           >
             <main className="flex-1 overflow-y-auto px-3.5 py-3 pb-20">
               <TabsContent value="today" className="rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:ring-offset-2 focus-visible:ring-offset-ink">
-                {isWideSidePanel ? (
-                  <div className="grid grid-cols-2 gap-5 items-start">
-                    <TodayScreen onLogged={handleLogged} />
+                <div className={twoColumnClass}>
+                  <TodayScreen onLogged={handleLogged} />
+                  <div className={wideOnlyClass}>
                     <TrendsScreen />
                   </div>
-                ) : (
-                  <TodayScreen onLogged={handleLogged} />
-                )}
+                </div>
               </TabsContent>
 
               <TabsContent value="trends" className="rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:ring-offset-2 focus-visible:ring-offset-ink">
-                {isWideSidePanel ? (
-                  <div className="grid grid-cols-2 gap-5 items-start">
+                <div className={twoColumnClass}>
+                  <div className={wideOnlyClass}>
                     <TodayScreen onLogged={handleLogged} />
-                    <TrendsScreen />
                   </div>
-                ) : (
                   <TrendsScreen />
-                )}
+                </div>
               </TabsContent>
 
               <TabsContent value="history" className="rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:ring-offset-2 focus-visible:ring-offset-ink">

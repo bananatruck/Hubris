@@ -28,9 +28,13 @@ function makeState(overrides: Partial<HubrisState> = {}, actionOverrides: Partia
   };
   return { actions, state };
 }
-function setup(overrides: Partial<HubrisState> = {}, actionOverrides: Partial<HubrisState['actions']> = {}) {
+function setup(
+  overrides: Partial<HubrisState> = {},
+  actionOverrides: Partial<HubrisState['actions']> = {},
+  surface: 'popup' | 'sidepanel' = 'popup',
+) {
   const { actions, state } = makeState(overrides, actionOverrides);
-  render(<HubrisContext.Provider value={state}><App surface="popup" /></HubrisContext.Provider>);
+  render(<HubrisContext.Provider value={state}><App surface={surface} /></HubrisContext.Provider>);
   return actions;
 }
 const failure = () => Promise.reject(new ValidationError('Storage is full.'));
@@ -59,6 +63,23 @@ it('disables only the pending log row and reports a rejected write', async () =>
   expect(await screen.findByRole('status')).toHaveTextContent('Storage is full.');
   await waitFor(() => expect(button).toBeEnabled());
   expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+});
+
+it('keeps the pending Today screen mounted across the side-panel breakpoint', () => {
+  vi.stubGlobal('innerWidth', 639);
+  const logActivity = vi.fn<HubrisState['actions']['logActivity']>(() => new Promise(() => {}));
+  setup({}, { logActivity }, 'sidepanel');
+  const logButton = screen.getByRole('button', { name: /Log Practice/ });
+  fireEvent.click(logButton);
+  expect(logButton).toBeDisabled();
+
+  vi.stubGlobal('innerWidth', 640);
+  fireEvent(window, new Event('resize'));
+
+  expect(screen.getByRole('button', { name: /Log Practice/ })).toBe(logButton);
+  expect(logButton).toBeDisabled();
+  fireEvent.click(logButton);
+  expect(logActivity).toHaveBeenCalledTimes(1);
 });
 
 it.each(['archive', 'restore', 'export'] as const)('reports %s failures', async (kind) => {
