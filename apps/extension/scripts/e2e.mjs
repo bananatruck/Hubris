@@ -202,10 +202,37 @@ try {
     const style = await popup.evaluate(() => {
       const panel = document.activeElement;
       const computed = getComputedStyle(panel);
-      return { boxShadow: computed.boxShadow, outlineStyle: computed.outlineStyle, outlineWidth: computed.outlineWidth };
+      const colorHasVisibleAlpha = (value) => {
+        if (value.trim().toLowerCase() === 'transparent') return false;
+        const colors = value.match(/rgba?\([^)]*\)/gi) ?? [];
+        return colors.some((color) => {
+          const channels = color.slice(color.indexOf('(') + 1, -1);
+          const slashAlpha = channels.split('/')[1]?.trim();
+          const commaAlpha = color.toLowerCase().startsWith('rgba')
+            ? channels.split(',')[3]?.trim()
+            : undefined;
+          const alphaText = slashAlpha ?? commaAlpha;
+          if (alphaText === undefined) return true;
+          const alpha = Number.parseFloat(alphaText);
+          return Number.isFinite(alpha) && alpha > 0;
+        });
+      };
+      const outlineVisible =
+        computed.outlineStyle !== 'none' &&
+        Number.parseFloat(computed.outlineWidth) > 0 &&
+        colorHasVisibleAlpha(computed.outlineColor);
+      const shadowVisible =
+        computed.boxShadow !== 'none' &&
+        colorHasVisibleAlpha(computed.boxShadow);
+      return {
+        boxShadow: computed.boxShadow,
+        outlineColor: computed.outlineColor,
+        outlineStyle: computed.outlineStyle,
+        outlineWidth: computed.outlineWidth,
+        visible: outlineVisible || shadowVisible,
+      };
     });
-    const hasRing = style.boxShadow !== 'none' || (style.outlineStyle !== 'none' && style.outlineWidth !== '0px');
-    assert(hasRing, `Focused tab panel has no visible indicator: ${JSON.stringify(style)}`);
+    assert(style.visible, `Focused tab panel has no visible indicator: ${JSON.stringify(style)}`);
   });
 
   await step(8, 'toolbar badge', async () => {
