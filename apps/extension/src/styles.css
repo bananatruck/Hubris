@@ -17,6 +17,25 @@
   --font-display: 'Bricolage Grotesque Variable', sans-serif;
   --font-sans: 'Inter Variable', sans-serif;
 }
-html { background: var(--color-ink); color: var(--color-text); font-family: var(--font-sans); }
-body { margin: 0; }
-html[data-surface='popup'] body { width: 380px; height: 600px; overflow-y: auto; }
+html { background: var(--color-ink); color: var(--color-text); font-family: var(--font-sans); overflow-x: hidden; }
+body { margin: 0; overflow-x: hidden; -webkit-font-smoothing: antialiased; }
+html[data-surface='popup'] body { width: 380px; height: 600px; overflow-y: auto; overflow-x: hidden; }
+html[data-surface='sidepanel'] body { min-width: 320px; min-height: 100vh; overflow-x: hidden; }
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+@keyframes hubris-border-beam {
+  0% { offset-distance: 0%; }
+  100% { offset-distance: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
