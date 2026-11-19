@@ -142,13 +142,16 @@ try {
   await step(4, 'log and undo', async () => {
     await selectTab(popup, 'Today');
     await popup.getByRole('button', { name: /^Log Leetcode/ }).first().click();
-    const toast = popup.getByText('Leetcode logged', { exact: true });
-    await toast.waitFor({ state: 'visible' });
     const undo = popup.getByRole('button', { name: /^Undo Leetcode$/ });
     await undo.waitFor({ state: 'visible' });
+    await popup.getByRole('button', { name: /^Log Classes/ }).first().click();
+    const undoClasses = popup.getByRole('button', { name: /^Undo Classes$/ });
+    await undoClasses.waitFor({ state: 'visible' });
+    assert(await undo.isVisible(), 'Logging Classes ended the Leetcode Undo window');
     await screenshot(popup, 'popup-logged.png');
+    await undoClasses.click();
+    await undoClasses.waitFor({ state: 'hidden' });
     await undo.click();
-    await toast.waitFor({ state: 'hidden' });
     await undo.waitFor({ state: 'hidden' });
   });
 
