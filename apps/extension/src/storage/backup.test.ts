@@ -3,7 +3,7 @@ import type { HubrisExport } from '@hubris/types';
 import { computeWeeklyReport } from '@hubris/core';
 import {
   createActivity, addLog, deleteActivity, deleteLog, eraseAll, listActivities, listLogs, getMeta, updateActivity,
-  readDataRevision,
+  readDataRevision, undoLog,
 } from './repository';
 import { createBackupDownload, exportData, importData, parseBackup } from './backup';
 
@@ -30,6 +30,30 @@ it('round trips export, parse, replace and downloadable JSON', async () => {
   const download = createBackupDownload(data);
   expect(download.filename).toBe(`hubris-backup-${data.exportedAt.slice(0, 10)}.json`);
   expect(JSON.parse(await download.blob.text())).toEqual(data);
+});
+
+it('records the import time for both modes and blocks undoing a pre-import log', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  try {
+    vi.setSystemTime(new Date('2026-11-18T10:00:00.000Z'));
+    const activity = await createActivity({ name: 'Gym', category: 'health', timesPerWeek: 3, importance: 'high' });
+    const log = await addLog(activity.id);
+    const data = await exportData();
+
+    vi.setSystemTime(new Date('2026-11-18T11:00:00.000Z'));
+    await importData(data, 'replace');
+    expect(await getMeta('lastImportAt')).toBe('2026-11-18T11:00:00.000Z');
+    await expect(undoLog(log)).rejects.toThrow(
+      'An import changed your data after this log, so Undo is no longer available. You can delete the log in History.',
+    );
+    expect(await listLogs()).toEqual([log]);
+
+    vi.setSystemTime(new Date('2026-11-18T12:00:00.000Z'));
+    await importData(data, 'merge');
+    expect(await getMeta('lastImportAt')).toBe('2026-11-18T12:00:00.000Z');
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it('merges newer activities, retains newer local records and dedupes logs', async () => {

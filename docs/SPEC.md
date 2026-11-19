@@ -50,6 +50,7 @@ Each decision below is one named constant or function in `packages/core/src/weig
     Trends use their reference date as the cutoff for every week so past weeks stay complete.
 11. Deletions create timestamped tombstones so merging an older backup cannot restore deleted activities or logs.
 12. A monotonic local data revision avoids rescoring on idle minute ticks; a future-dated log is counted at the next local day change or data change.
+13. Immediate Undo is unavailable when a later import may have changed the logged item; History deletion remains available.
 
 ## Worked examples (each one is a unit test in `packages/core`)
 

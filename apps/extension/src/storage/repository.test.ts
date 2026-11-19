@@ -77,6 +77,16 @@ describe('repository', () => {
     expect(await repo.listLogs()).toEqual([retained]);
   });
 
+  it('undoes a log through one transaction and writes its tombstone', async () => {
+    const activity = await repo.createActivity(input);
+    const log = await repo.addLog(activity.id);
+
+    await repo.undoLog(log);
+
+    expect(await repo.listLogs()).toEqual([]);
+    expect(await (await getDB()).get('deletions', `log:${log.id}`)).toMatchObject({ id: log.id, kind: 'log' });
+  });
+
   it('records deletion tombstones, removes restored log tombstones, and erases tombstones', async () => {
     const activity = await repo.createActivity(input);
     const log = await repo.addLog(activity.id);

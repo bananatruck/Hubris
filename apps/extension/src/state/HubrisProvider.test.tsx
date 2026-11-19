@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { formatDateKey } from '@hubris/core';
 import { HubrisProvider } from './HubrisProvider';
 import { useHubris } from './useHubris';
-import { createActivity, eraseAll } from '../storage/repository';
+import { addLog, createActivity, eraseAll } from '../storage/repository';
 import * as repository from '../storage/repository';
 
 function Consumer() {
@@ -59,6 +59,19 @@ it('keeps loaded data ready when a refresh fails', async () => {
   await screen.findByText('Error: Refresh failed.');
   expect(screen.getByText('Status: ready')).toBeTruthy();
   expect(screen.getByText('Logs: 0')).toBeTruthy();
+});
+
+it('delegates Undo to the repository import-aware undo operation', async () => {
+  const activity = await createActivity({ name: 'Practice', category: 'career', timesPerWeek: 1, importance: 'high' });
+  const log = await addLog(activity.id);
+  const undoLog = vi.spyOn(repository, 'undoLog');
+  render(<HubrisProvider><Consumer /></HubrisProvider>);
+  await screen.findByText('Logs: 1');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+
+  await waitFor(() => { expect(undoLog).toHaveBeenCalledWith(log); });
+  await screen.findByText('Logs: 0');
 });
 
 it('aligns all 84 heatmap days into twelve Monday to Sunday weeks', async () => {

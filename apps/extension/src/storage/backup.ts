@@ -137,6 +137,7 @@ function compareTimestamps(left: string, right: string) {
 export async function importData(data: HubrisExport, mode: 'replace' | 'merge') {
   const checked = checkedCurrentBackupSchema.safeParse(data);
   if (!checked.success) throw new ValidationError(checked.error.issues.map((issue) => issue.message).join(' '));
+  const lastImportAt = new Date().toISOString();
   const db = await getDB();
   const tx = db.transaction(['activities', 'logs', 'meta', 'deletions'], 'readwrite');
   return withTransaction(tx, async () => {
@@ -204,6 +205,7 @@ export async function importData(data: HubrisExport, mode: 'replace' | 'merge') 
       }
     }
     await tx.objectStore('meta').put(true, 'onboardingComplete');
+    await tx.objectStore('meta').put(lastImportAt, 'lastImportAt');
     await tx.objectStore('meta').put((typeof revision === 'number' ? revision : 0) + 1, 'dataRevision');
     return { activities, logs };
   });

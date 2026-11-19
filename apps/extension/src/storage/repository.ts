@@ -131,6 +131,23 @@ export async function deleteLog(id: string) {
     await incrementDataRevision(tx.objectStore('meta'));
   });
 }
+export async function undoLog(log: ActivityLog) {
+  const checked = validate(logSchema, log);
+  const db = await getDB();
+  const tx = db.transaction(['logs', 'meta', 'deletions'], 'readwrite');
+  return withTransaction(tx, async () => {
+    const lastImportAt = await tx.objectStore('meta').get('lastImportAt');
+    if (typeof lastImportAt === 'string' && Date.parse(lastImportAt) > Date.parse(checked.loggedAt)) {
+      throw new ValidationError(
+        'An import changed your data after this log, so Undo is no longer available. You can delete the log in History.',
+      );
+    }
+    const deletedAt = new Date().toISOString();
+    await tx.objectStore('logs').delete(checked.id);
+    await tx.objectStore('deletions').put(tombstone('log', checked.id, deletedAt));
+    await incrementDataRevision(tx.objectStore('meta'));
+  });
+}
 export async function getMeta(key: string) {
   return (await getDB()).get('meta', key);
 }
