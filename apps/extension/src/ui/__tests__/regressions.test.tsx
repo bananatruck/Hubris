@@ -39,7 +39,7 @@ function setup(
   return actions;
 }
 const failure = () => Promise.reject(new ValidationError('Storage is full.'));
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 it('announces the score outside the image semantics', () => {
   setup();
@@ -63,7 +63,7 @@ it('disables only the pending log row and reports a rejected write', async () =>
   rejectWrite(new ValidationError('Storage is full.'));
   expect(await screen.findByRole('status')).toHaveTextContent('Storage is full.');
   await waitFor(() => expect(button).toBeEnabled());
-  expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+  expect(screen.queryByRole('button', { name: /^Undo/ })).toBeNull();
 });
 
 it('keeps the pending Today screen mounted across the side-panel breakpoint', () => {
@@ -93,9 +93,9 @@ it.each(['archive', 'restore', 'export'] as const)('reports %s failures', async 
 it('reports undo failure without offering another undo', async () => {
   setup({}, { undoLog: failure });
   fireEvent.click(screen.getByRole('button', { name: /Log Practice/ }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Undo' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Undo Practice' }));
   await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Could not undo. The log is still there.'));
-  expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+  expect(screen.queryByRole('button', { name: /^Undo/ })).toBeNull();
 });
 
 it('keeps a newer log Undo available when an older Undo fails', async () => {
@@ -118,15 +118,102 @@ it('keeps a newer log Undo available when an older Undo fails', async () => {
   );
 
   fireEvent.click(screen.getByRole('button', { name: /Log Practice/ }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Undo' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Undo Practice' }));
   fireEvent.click(screen.getByRole('button', { name: /Log Reading/ }));
-  await screen.findByText('Reading logged');
+  await screen.findByRole('button', { name: 'Undo Reading' });
 
   rejectUndo(new ValidationError('Storage is full.'));
 
-  expect(await screen.findByText('Could not undo. The log is still there.')).toBeTruthy();
-  expect(screen.getByText('Reading logged')).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Undo' })).toBeTruthy();
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Could not undo. The log is still there.'));
+  expect(screen.getByRole('button', { name: 'Undo Reading' })).toBeTruthy();
+});
+
+it('keeps each recent log independently undoable', async () => {
+  vi.useFakeTimers();
+  const reading = { ...activity, id: 'b', name: 'Reading' };
+  const practiceLog = { ...log, id: 'practice-log' };
+  const readingLog = { ...log, id: 'reading-log', activityId: reading.id };
+  const logActivity = vi.fn<HubrisState['actions']['logActivity']>()
+    .mockResolvedValueOnce(practiceLog)
+    .mockResolvedValueOnce(readingLog);
+  const actions = setup(
+    {
+      activities: [activity, reading],
+      report: computeWeeklyReport([activity, reading], [log], now),
+    },
+    { logActivity },
+  );
+
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: /Log Practice/ }));
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: /Log Reading/ }));
+  });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Undo Reading' }));
+  expect(actions.undoLog).toHaveBeenCalledWith(readingLog);
+  expect(screen.getByRole('button', { name: 'Undo Practice' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Undo Practice' }));
+  expect(actions.undoLog).toHaveBeenCalledWith(practiceLog);
+});
+
+it('expires each recent log on its own timer', async () => {
+  vi.useFakeTimers();
+  const reading = { ...activity, id: 'b', name: 'Reading' };
+  const logActivity = vi.fn<HubrisState['actions']['logActivity']>()
+    .mockResolvedValueOnce({ ...log, id: 'practice-log' })
+    .mockResolvedValueOnce({ ...log, id: 'reading-log', activityId: reading.id });
+  setup(
+    {
+      activities: [activity, reading],
+      report: computeWeeklyReport([activity, reading], [log], now),
+    },
+    { logActivity },
+  );
+
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: /Log Practice/ }));
+  });
+  act(() => vi.advanceTimersByTime(2000));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: /Log Reading/ }));
+  });
+  act(() => vi.advanceTimersByTime(4000));
+
+  expect(screen.queryByRole('button', { name: 'Undo Practice' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Undo Reading' })).toBeTruthy();
+});
+
+it('keeps only the three newest log toasts', async () => {
+  vi.useFakeTimers();
+  const activities = ['Alpha', 'Beta', 'Gamma', 'Delta'].map((name, index) => ({
+    ...activity,
+    id: String(index),
+    name,
+  }));
+  const logActivity = vi.fn<HubrisState['actions']['logActivity']>();
+  activities.forEach((item, index) => {
+    logActivity.mockResolvedValueOnce({ ...log, id: `log-${index}`, activityId: item.id });
+  });
+  setup(
+    {
+      activities,
+      report: computeWeeklyReport(activities, [], now),
+    },
+    { logActivity },
+  );
+
+  for (const item of activities) {
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: new RegExp(`Log ${item.name}`) }));
+    });
+  }
+
+  expect(screen.queryByRole('button', { name: 'Undo Alpha' })).toBeNull();
+  for (const name of ['Beta', 'Gamma', 'Delta']) {
+    expect(screen.getByRole('button', { name: `Undo ${name}` })).toBeTruthy();
+  }
 });
 
 it.each(['activity', 'log', 'erase'] as const)('keeps the %s dialog open while pending and on failure, then closes on success', async (kind) => {

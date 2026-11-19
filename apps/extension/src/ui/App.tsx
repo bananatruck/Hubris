@@ -16,6 +16,7 @@ import { HistoryScreen } from './screens/HistoryScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 
 type TabValue = 'today' | 'trends' | 'history' | 'settings';
+const MAX_TOASTS = 3;
 
 const NAV_ITEMS: readonly AceternityTabItem[] = [
   { value: 'today', label: 'Today', icon: <CalendarCheck2 className="h-4 w-4" /> },
@@ -51,7 +52,7 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
   const { status, error, report, onboardingComplete, actions } = useHubris();
   const [activeTab, setActiveTab] = useState<TabValue>('today');
   const [keepOnboardingForStep3, setKeepOnboardingForStep3] = useState(false);
-  const [toast, setToast] = useState<ToastData | null>(null);
+  const [toasts, setToasts] = useState<ToastData[]>([]);
   const [windowId, setWindowId] = useState<number | null>(null);
 
   const canShowSidePanelButton =
@@ -77,9 +78,13 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
     };
   }, [canShowSidePanelButton]);
 
-  const notify = useCallback((notification: Notification) => {
-    setToast({ ...notification, id: crypto.randomUUID() });
+  const addToast = useCallback((toast: ToastData) => {
+    setToasts((current) => [...current, toast].slice(-MAX_TOASTS));
   }, []);
+
+  const notify = useCallback((notification: Notification) => {
+    addToast({ ...notification, id: crypto.randomUUID() });
+  }, [addToast]);
 
   const handleOpenSidePanel = () => {
     if (typeof chrome !== 'undefined' && chrome.sidePanel?.open && windowId !== null) {
@@ -95,26 +100,27 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
 
   const handleLogged = useCallback(
     (activityName: string, log: ActivityLog) => {
-      const toastId = crypto.randomUUID();
-      setToast({
-        id: toastId,
+      addToast({
+        id: crypto.randomUUID(),
         tone: 'info',
         message: `${activityName} logged`,
+        undoLabel: `Undo ${activityName}`,
         onUndo: () => {
           void actions.undoLog(log).catch(() => {
-            const message = 'Could not undo. The log is still there.';
-            setToast((current) => current && current.id !== toastId
-              ? { ...current, errorMessage: message }
-              : { id: crypto.randomUUID(), message, tone: 'error' });
+            addToast({
+              id: crypto.randomUUID(),
+              message: 'Could not undo. The log is still there.',
+              tone: 'error',
+            });
           });
         },
       });
     },
-    [actions],
+    [actions, addToast],
   );
 
-  const dismissToast = useCallback(() => {
-    setToast(null);
+  const dismissToast = useCallback((id: string) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id));
   }, []);
 
   const weekRangeText = formatWeekRange(report.weekStart, report.weekEnd);
@@ -259,7 +265,7 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
             </nav>
           </TabsRoot>
         )}
-        <Toast toast={toast} onDismiss={dismissToast} durationMs={6000} />
+        <Toast toasts={toasts} onDismiss={dismissToast} durationMs={6000} />
       </div>
     </NotificationContext.Provider>
   );
