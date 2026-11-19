@@ -1,10 +1,52 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as repo from './repository';
+import { computeWeeklyReport } from '@hubris/core';
 
 export const input = { name: '  Leetcode  ', category: 'career', timesPerWeek: 5, importance: 'high' } satisfies repo.CreateActivityInput;
 beforeEach(async () => { await repo.eraseAll(); });
 
 describe('repository', () => {
+  it('creates activity history and retains each settings edit', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date(2026, 10, 16, 9));
+      const created = await repo.createActivity(input);
+      expect(created.versions).toEqual([{
+        from: created.createdAt, category: 'career', timesPerWeek: 5, importance: 'high', archived: false,
+      }]);
+
+      vi.setSystemTime(new Date(2026, 10, 17, 9));
+      const renamed = await repo.updateActivity(created.id, { name: 'Practice' });
+      expect(renamed.versions).toEqual(created.versions);
+      const revised = await repo.updateActivity(created.id, { timesPerWeek: 4 });
+      expect(revised.versions).toHaveLength(2);
+      expect(revised.versions?.[1]).toMatchObject({ from: new Date().toISOString(), timesPerWeek: 4 });
+
+      vi.setSystemTime(new Date(2026, 10, 23, 9));
+      const archived = await repo.setArchived(created.id, true);
+      expect(archived.versions).toHaveLength(3);
+      expect(archived.versions?.[2]).toMatchObject({ from: archived.updatedAt, timesPerWeek: 4, archived: true });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('preserves settings for as-of reports earlier in the edited week', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date(2026, 10, 16, 9));
+      const activity = await repo.createActivity(input);
+      const asOf = new Date(2026, 10, 17, 9);
+      vi.setSystemTime(new Date(2026, 10, 18, 9));
+      const edited = await repo.updateActivity(activity.id, { timesPerWeek: 2 });
+
+      expect(computeWeeklyReport([edited], [], asOf).categories.career.activities[0]?.goal).toBe(5);
+      expect(computeWeeklyReport([edited], [], new Date()).categories.career.activities[0]?.goal).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('creates, trims, updates, archives, restores, and deletes activities', async () => {
     const created = await repo.createActivity(input);
     expect(created.name).toBe('Leetcode');

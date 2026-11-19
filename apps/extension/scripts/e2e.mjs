@@ -104,7 +104,7 @@ try {
 
   await step(2, 'seed IndexedDB', async () => {
     await popup.evaluate((data) => new Promise((resolve, reject) => {
-      const request = indexedDB.open('hubris', 1);
+      const request = indexedDB.open('hubris');
       request.onupgradeneeded = () => {
         const db = request.result;
         db.createObjectStore('activities', { keyPath: 'id' });
@@ -249,7 +249,7 @@ try {
       monday.setHours(0, 0, 0, 0);
       const created = new Date(monday);
       created.setDate(created.getDate() - 1);
-      const request = indexedDB.open('hubris', 1);
+      const request = indexedDB.open('hubris');
       request.onerror = () => reject(request.error);
       request.onblocked = () => reject(new Error('IndexedDB suggestion seed is blocked'));
       request.onsuccess = () => {
@@ -267,6 +267,7 @@ try {
           archived: false,
           createdAt: created.toISOString(),
           updatedAt: created.toISOString(),
+          versions: [{ from: created.toISOString(), category: 'health', timesPerWeek: 7, importance: 'high', archived: false }],
         });
         for (let offset = 0; offset < elapsedDays; offset += 1) {
           const loggedAt = new Date(monday);

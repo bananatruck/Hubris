@@ -91,3 +91,39 @@ describe('same priority bucket', () => {
         expect(result.map((s) => [s.activityId, s.priority])).toEqual([['high', 8], ['low', 8]]);
     });
 });
+
+
+describe('effective settings', () => {
+    function withFutureSettings(activity: TrackedActivity, future: Partial<Pick<TrackedActivity, 'timesPerWeek' | 'category' | 'importance'>>): TrackedActivity {
+        return {
+            ...activity, ...future,
+            versions: [
+                { from: activity.createdAt, category: activity.category, timesPerWeek: activity.timesPerWeek, importance: activity.importance, archived: false },
+                { from: new Date(2026, 10, 23).toISOString(), category: activity.category, timesPerWeek: activity.timesPerWeek, importance: activity.importance, archived: false, ...future },
+            ],
+        };
+    }
+
+    it('does not offer a streak for a goal that only becomes daily next week', () => {
+        const activity = { ...base, timesPerWeek: 1 };
+        const suggestions = generateWeeklySuggestions([withFutureSettings(activity, { timesPerWeek: 7 })], [], now);
+        expect(suggestions.map(({ type }) => type)).toEqual(['light-day']);
+    });
+
+    it('names the effective category before a future category change', () => {
+        const activity = { ...base, category: 'career' as const, timesPerWeek: 1 };
+        expect(generateWeeklySuggestions([withFutureSettings(activity, { category: 'health' })], [], now)[0]?.message)
+            .toBe('Nothing logged yet today. Gym would lift your Career score.');
+    });
+
+    it('uses effective importance for candidate selection and equal-priority ordering', () => {
+        const high = { ...base, id: 'high', name: 'High', timesPerWeek: 9 };
+        const low = { ...base, id: 'low', name: 'Low', timesPerWeek: 10, importance: 'low' as const };
+        const future = [withFutureSettings(low, { importance: 'high' }), withFutureSettings(high, { importance: 'low' })];
+        expect(generateWeeklySuggestions(future, [], now).map(({ activityId }) => activityId)).toEqual(['high', 'low']);
+        const logs = ['low', 'low', 'high', 'high'].map((activityId, index) => ({
+            id: String(index), activityId, loggedAt: new Date(2026, 10, 16, 9).toISOString(),
+        }));
+        expect(generateWeeklySuggestions(future, logs, now).map(({ activityId }) => activityId)).toEqual(['high', 'low']);
+    });
+});

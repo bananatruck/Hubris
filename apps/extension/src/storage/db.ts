@@ -1,5 +1,6 @@
 import { openDB, type DBSchema } from 'idb';
 import type { ActivityLog, TrackedActivity } from '@hubris/types';
+import { withTransaction } from './transaction';
 
 interface HubrisDatabase extends DBSchema {
   activities: { key: string; value: TrackedActivity };
@@ -8,19 +9,49 @@ interface HubrisDatabase extends DBSchema {
     value: ActivityLog;
     indexes: { activityId: string; loggedAt: string };
   };
-  meta: { key: string; value: boolean };
+  meta: { key: string; value: boolean | number | string };
+  deletions: {
+    key: string;
+    value: { key: string; kind: 'activity' | 'log'; id: string; deletedAt: string };
+  };
 }
 
 let connection: ReturnType<typeof openDB<HubrisDatabase>> | undefined;
 
 export function getDB() {
-  connection ??= openDB<HubrisDatabase>('hubris', 1, {
-    upgrade(db) {
-      db.createObjectStore('activities', { keyPath: 'id' });
-      const logs = db.createObjectStore('logs', { keyPath: 'id' });
-      logs.createIndex('activityId', 'activityId');
-      logs.createIndex('loggedAt', 'loggedAt');
-      db.createObjectStore('meta');
+  connection ??= openDB<HubrisDatabase>('hubris', 2, {
+    upgrade(db, oldVersion, _newVersion, tx) {
+      if (oldVersion < 1) {
+        db.createObjectStore('activities', { keyPath: 'id' });
+        const logs = db.createObjectStore('logs', { keyPath: 'id' });
+        logs.createIndex('activityId', 'activityId');
+        logs.createIndex('loggedAt', 'loggedAt');
+        db.createObjectStore('meta');
+      }
+      if (oldVersion < 2) {
+        db.createObjectStore('deletions', { keyPath: 'key' });
+      }
+      if (oldVersion === 1) {
+        void withTransaction(tx, async () => {
+          let cursor = await tx.objectStore('activities').openCursor();
+          while (cursor) {
+            const activity = cursor.value;
+            await cursor.update({
+              ...activity,
+              versions: [{
+                from: activity.createdAt,
+                category: activity.category,
+                timesPerWeek: activity.timesPerWeek,
+                importance: activity.importance,
+                archived: activity.archived,
+              }],
+            });
+            cursor = await cursor.continue();
+          }
+        }).catch(() => {
+          // Aborting the upgrade rejects the opening request below.
+        });
+      }
     },
     blocking() {
       void connection?.then((db) => db.close());

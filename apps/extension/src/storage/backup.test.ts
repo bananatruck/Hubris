@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { HubrisExport } from '@hubris/types';
+import { computeWeeklyReport } from '@hubris/core';
 import { createActivity, addLog, eraseAll, listActivities, listLogs, getMeta, updateActivity } from './repository';
 import { createBackupDownload, exportData, importData, parseBackup } from './backup';
 
@@ -102,9 +103,10 @@ it('keeps a local edit after merging a backup from a device whose clock ran ahea
     };
     await importData(backup, 'merge');
     expect((await listActivities())[0].updatedAt).toBe(ahead);
-    const edited = await updateActivity(activity.id, { name: 'Leetcode edited here' });
+    const edited = await updateActivity(activity.id, { name: 'Leetcode edited here', timesPerWeek: 4 });
     expect(Date.now()).toBeLessThan(Date.parse(ahead));
     expect(Date.parse(edited.updatedAt)).toBeGreaterThan(Date.parse(ahead));
+    expect(computeWeeklyReport([edited], [], new Date()).categories.career.activities[0]?.goal).toBe(4);
 
     await importData(backup, 'merge');
     expect((await listActivities())[0].name).toBe('Leetcode edited here');

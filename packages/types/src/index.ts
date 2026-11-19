@@ -211,6 +211,14 @@ export type Importance = 'high' | 'medium' | 'low';
  */
 export type ScoredCategory = 'career' | 'health' | 'hobbies-habits';
 
+export interface ActivityVersion {
+    from: string;
+    category: ScoredCategory;
+    timesPerWeek: number;
+    importance: Importance;
+    archived: boolean;
+}
+
 export interface TrackedActivity {
     id: string;
     name: string;
@@ -220,6 +228,8 @@ export interface TrackedActivity {
     importance: Importance;
     /** Archived activities keep their logs but leave the score. */
     archived: boolean;
+    /** Settings history, sorted by `from`; top-level settings equal the final version. */
+    versions?: ActivityVersion[];
     createdAt: string; // ISO date
     updatedAt: string; // ISO date
 }

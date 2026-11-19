@@ -4,8 +4,8 @@ import { withTransaction } from './transaction';
 import { activityInputSchema, logSchema, validate, ValidationError } from './validation';
 
 export { ValidationError } from './validation';
-export type CreateActivityInput = Omit<TrackedActivity, 'id' | 'createdAt' | 'updatedAt' | 'archived'> & { archived?: boolean };
-export type ActivityPatch = Partial<Omit<TrackedActivity, 'id' | 'createdAt' | 'updatedAt'>>;
+export type CreateActivityInput = Omit<TrackedActivity, 'id' | 'createdAt' | 'updatedAt' | 'archived' | 'versions'> & { archived?: boolean };
+export type ActivityPatch = Partial<Omit<TrackedActivity, 'id' | 'createdAt' | 'updatedAt' | 'versions'>>;
 
 /**
  * A merged backup can carry an updatedAt from a device whose clock ran ahead.
@@ -24,7 +24,13 @@ export async function listLogs() {
 export async function createActivity(input: CreateActivityInput) {
   const fields = validate(activityInputSchema, input);
   const now = new Date().toISOString();
-  const activity: TrackedActivity = { ...fields, id: crypto.randomUUID(), createdAt: now, updatedAt: now };
+  const activity: TrackedActivity = {
+    ...fields,
+    id: crypto.randomUUID(),
+    createdAt: now,
+    updatedAt: now,
+    versions: [{ from: now, category: fields.category, timesPerWeek: fields.timesPerWeek, importance: fields.importance, archived: fields.archived }],
+  };
   const db = await getDB();
   await db.add('activities', activity);
   return activity;
@@ -37,7 +43,28 @@ export async function updateActivity(id: string, patch: ActivityPatch) {
     if (!current) throw new ValidationError('Activity no longer exists.');
     const { name, category, timesPerWeek, importance, archived } = current;
     const fields = validate(activityInputSchema, { name, category, timesPerWeek, importance, archived, ...patch });
-    const updated = { ...current, ...fields, updatedAt: nextUpdatedAt(current.updatedAt) };
+    const effectiveAt = new Date().toISOString();
+    const updatedAt = nextUpdatedAt(current.updatedAt);
+    const settingsChanged = category !== fields.category
+      || timesPerWeek !== fields.timesPerWeek
+      || importance !== fields.importance
+      || archived !== fields.archived;
+    const existingVersions = current.versions?.length
+      ? [...current.versions]
+      : [{ from: current.createdAt, category, timesPerWeek, importance, archived }];
+    let versions = existingVersions;
+    if (settingsChanged) {
+      versions = existingVersions.filter((version) => Date.parse(version.from) <= Date.parse(effectiveAt));
+      const version = {
+        from: effectiveAt,
+        category: fields.category,
+        timesPerWeek: fields.timesPerWeek,
+        importance: fields.importance,
+        archived: fields.archived,
+      };
+      versions.push(version);
+    }
+    const updated = { ...current, ...fields, versions, updatedAt };
     await tx.store.put(updated);
     return updated;
   });
@@ -95,7 +122,7 @@ export async function readSnapshot() {
     const [activities, logs, onboardingComplete] = await Promise.all([
       tx.objectStore('activities').getAll(), tx.objectStore('logs').getAll(), tx.objectStore('meta').get('onboardingComplete'),
     ]);
-    return { activities, logs, onboardingComplete: onboardingComplete ?? false };
+    return { activities, logs, onboardingComplete: onboardingComplete === true };
   });
 }
 
@@ -111,7 +138,15 @@ export async function completeOnboarding(withExamples: boolean) {
         { name: 'Classes', timesPerWeek: 4, importance: 'medium' },
       ] satisfies Pick<TrackedActivity, 'name' | 'timesPerWeek' | 'importance'>[]) {
         await tx.objectStore('activities').add({
-          ...input, id: crypto.randomUUID(), category: 'career', archived: false, createdAt: now, updatedAt: now,
+          ...input,
+          id: crypto.randomUUID(),
+          category: 'career',
+          archived: false,
+          createdAt: now,
+          updatedAt: now,
+          versions: [{
+            from: now, category: 'career', timesPerWeek: input.timesPerWeek, importance: input.importance, archived: false,
+          }],
         });
       }
     }
