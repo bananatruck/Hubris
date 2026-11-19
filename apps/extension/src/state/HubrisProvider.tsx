@@ -18,7 +18,24 @@ export function HubrisProvider({ children }: { children: ReactNode }) {
   const [now, setNow] = useState(() => new Date());
   const generation = useRef({ version: 0 });
   const revision = useRef<number | null>(null);
+  const nextClockChange = useRef(Infinity);
   const hasLoaded = useRef(false);
+
+  useEffect(() => {
+    let next = Infinity;
+    const cutoff = now.getTime();
+    for (const log of snapshot.logs) {
+      const time = Date.parse(log.loggedAt);
+      if (time > cutoff && time < next) next = time;
+    }
+    for (const activity of snapshot.activities) {
+      for (const version of activity.versions ?? []) {
+        const time = Date.parse(version.from);
+        if (time > cutoff && time < next) next = time;
+      }
+    }
+    nextClockChange.current = next;
+  }, [snapshot, now]);
 
   const reload = useCallback(async () => {
     const request = ++generation.current.version;
@@ -54,7 +71,8 @@ export function HubrisProvider({ children }: { children: ReactNode }) {
           return;
         }
         const current = new Date();
-        setNow((previous) => formatDateKey(previous) === formatDateKey(current) ? previous : current);
+        setNow((previous) => formatDateKey(previous) !== formatDateKey(current)
+          || current.getTime() >= nextClockChange.current || current < previous ? current : previous);
       }).catch((cause: unknown) => {
         if (cancelled) return;
         setError(cause instanceof Error ? cause.message : 'Could not read local data. Try again.');
@@ -97,13 +115,16 @@ export function HubrisProvider({ children }: { children: ReactNode }) {
     };
   }, [reload]);
 
-  const value = useMemo<HubrisState>(() => ({
-    status, error, now, ...snapshot, actions,
+  const scores = useMemo(() => ({
     report: computeWeeklyReport(snapshot.activities, snapshot.logs, now),
     suggestions: generateWeeklySuggestions(snapshot.activities, snapshot.logs, now),
     trend: computeWeeklyTrend(snapshot.activities, snapshot.logs, now, 8),
     heatmap: generateLogHeatmap(snapshot.logs, 84, getWeekBounds(now).end),
-  }), [status, error, now, snapshot, actions]);
+  }), [now, snapshot]);
+
+  const value = useMemo<HubrisState>(() => ({
+    status, error, now, ...snapshot, actions, ...scores,
+  }), [status, error, now, snapshot, actions, scores]);
 
   return <HubrisContext.Provider value={value}>{children}</HubrisContext.Provider>;
 }

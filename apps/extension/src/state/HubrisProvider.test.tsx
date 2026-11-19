@@ -151,12 +151,55 @@ it('advances now at local midnight without reloading the snapshot', async () => 
   const readSnapshot = vi.spyOn(repository, 'readSnapshot');
   try {
     render(<HubrisProvider><Consumer /></HubrisProvider>);
+    await screen.findByText('Status: ready');
     await screen.findByText('Today: 2026-11-18');
     readSnapshot.mockClear();
 
     await act(() => vi.advanceTimersByTimeAsync(60_000));
 
-    expect(screen.getByText('Today: 2026-11-19')).toBeTruthy();
+    await screen.findByText('Today: 2026-11-19');
+    expect(readSnapshot).not.toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('counts a future log when its time arrives without rereading unchanged history', async () => {
+  vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+  vi.setSystemTime(new Date(2026, 10, 18, 12));
+  const activity = await createActivity({ name: 'Practice', category: 'career', timesPerWeek: 1, importance: 'high' });
+  await addLog(activity.id, undefined, new Date(2026, 10, 18, 12, 1));
+  const readSnapshot = vi.spyOn(repository, 'readSnapshot');
+  try {
+    render(<HubrisProvider><Consumer /></HubrisProvider>);
+    await screen.findByText('Score: 0');
+    await screen.findByText('Logs: 1');
+    readSnapshot.mockClear();
+
+    await act(() => vi.advanceTimersByTimeAsync(60_000));
+
+    await screen.findByText('Score: 36');
+    expect(readSnapshot).not.toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('starts the new reporting week on Monday even when storage is unchanged', async () => {
+  vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+  vi.setSystemTime(new Date(2026, 10, 22, 23, 59, 30));
+  const activity = await createActivity({ name: 'Practice', category: 'career', timesPerWeek: 1, importance: 'high' });
+  await addLog(activity.id);
+  const readSnapshot = vi.spyOn(repository, 'readSnapshot');
+  try {
+    render(<HubrisProvider><Consumer /></HubrisProvider>);
+    await screen.findByText('Score: 36');
+    readSnapshot.mockClear();
+
+    await act(() => vi.advanceTimersByTimeAsync(60_000));
+
+    await screen.findByText('Score: 0');
+    await screen.findByText('Today: 2026-11-23');
     expect(readSnapshot).not.toHaveBeenCalled();
   } finally {
     vi.useRealTimers();
