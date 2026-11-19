@@ -144,7 +144,7 @@ try {
     await popup.getByRole('button', { name: /^Log Leetcode/ }).first().click();
     const toast = popup.getByText('Leetcode logged', { exact: true });
     await toast.waitFor({ state: 'visible' });
-    const undo = popup.getByRole('button', { name: 'Undo', exact: true });
+    const undo = popup.getByRole('button', { name: /^Undo Leetcode$/ });
     await undo.waitFor({ state: 'visible' });
     await screenshot(popup, 'popup-logged.png');
     await undo.click();
