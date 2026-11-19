@@ -270,7 +270,7 @@ export function SettingsScreen() {
                 </p>
                 {importMode === 'merge' && (
                   <p className="text-xs text-muted">
-                    Merge adds everything in the file that is missing here, including items you deleted after this backup was made.
+                    Merge adds what is missing here and keeps deletions made on either side.
                   </p>
                 )}
                 <div className="flex justify-end gap-2">

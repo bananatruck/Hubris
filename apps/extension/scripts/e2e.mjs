@@ -104,7 +104,7 @@ try {
 
   await step(2, 'seed IndexedDB', async () => {
     await popup.evaluate((data) => new Promise((resolve, reject) => {
-      const request = indexedDB.open('hubris', 1);
+      const request = indexedDB.open('hubris');
       request.onupgradeneeded = () => {
         const db = request.result;
         db.createObjectStore('activities', { keyPath: 'id' });
@@ -142,13 +142,16 @@ try {
   await step(4, 'log and undo', async () => {
     await selectTab(popup, 'Today');
     await popup.getByRole('button', { name: /^Log Leetcode/ }).first().click();
-    const toast = popup.getByText('Leetcode logged', { exact: true });
-    await toast.waitFor({ state: 'visible' });
-    const undo = popup.getByRole('button', { name: 'Undo', exact: true });
+    const undo = popup.getByRole('button', { name: /^Undo Leetcode$/ });
     await undo.waitFor({ state: 'visible' });
+    await popup.getByRole('button', { name: /^Log Classes/ }).first().click();
+    const undoClasses = popup.getByRole('button', { name: /^Undo Classes$/ });
+    await undoClasses.waitFor({ state: 'visible' });
+    assert(await undo.isVisible(), 'Logging Classes ended the Leetcode Undo window');
     await screenshot(popup, 'popup-logged.png');
+    await undoClasses.click();
+    await undoClasses.waitFor({ state: 'hidden' });
     await undo.click();
-    await toast.waitFor({ state: 'hidden' });
     await undo.waitFor({ state: 'hidden' });
   });
 
@@ -249,7 +252,7 @@ try {
       monday.setHours(0, 0, 0, 0);
       const created = new Date(monday);
       created.setDate(created.getDate() - 1);
-      const request = indexedDB.open('hubris', 1);
+      const request = indexedDB.open('hubris');
       request.onerror = () => reject(request.error);
       request.onblocked = () => reject(new Error('IndexedDB suggestion seed is blocked'));
       request.onsuccess = () => {
@@ -267,6 +270,7 @@ try {
           archived: false,
           createdAt: created.toISOString(),
           updatedAt: created.toISOString(),
+          versions: [{ from: created.toISOString(), category: 'health', timesPerWeek: 7, importance: 'high', archived: false }],
         });
         for (let offset = 0; offset < elapsedDays; offset += 1) {
           const loggedAt = new Date(monday);

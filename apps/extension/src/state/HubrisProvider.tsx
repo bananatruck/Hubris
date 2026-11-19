@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { computeWeeklyReport, computeWeeklyTrend, generateLogHeatmap, generateWeeklySuggestions, getWeekBounds } from '@hubris/core';
+import {
+  computeWeeklyReport, computeWeeklyTrend, formatDateKey, generateLogHeatmap, generateWeeklySuggestions, getWeekBounds,
+} from '@hubris/core';
 import * as repository from '../storage/repository';
 import { downloadBackup, exportData, importData, parseBackup } from '../storage/backup';
 import { isDataChangedMessage, notifyDataChanged } from '../shared/messages';
 import { HubrisContext, type HubrisState } from './useHubris';
 
-type Snapshot = Awaited<ReturnType<typeof repository.readSnapshot>>;
+type RepositorySnapshot = Awaited<ReturnType<typeof repository.readSnapshot>>;
+type Snapshot = Omit<RepositorySnapshot, 'dataRevision'>;
 const emptySnapshot: Snapshot = { activities: [], logs: [], onboardingComplete: false };
 
 export function HubrisProvider({ children }: { children: ReactNode }) {
@@ -14,13 +17,32 @@ export function HubrisProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
   const generation = useRef({ version: 0 });
+  const revision = useRef<number | null>(null);
+  const nextClockChange = useRef(Infinity);
   const hasLoaded = useRef(false);
+
+  useEffect(() => {
+    let next = Infinity;
+    const cutoff = now.getTime();
+    for (const log of snapshot.logs) {
+      const time = Date.parse(log.loggedAt);
+      if (time > cutoff && time < next) next = time;
+    }
+    for (const activity of snapshot.activities) {
+      for (const version of activity.versions ?? []) {
+        const time = Date.parse(version.from);
+        if (time > cutoff && time < next) next = time;
+      }
+    }
+    nextClockChange.current = next;
+  }, [snapshot, now]);
 
   const reload = useCallback(async () => {
     const request = ++generation.current.version;
     try {
-      const data = await repository.readSnapshot();
+      const { dataRevision, ...data } = await repository.readSnapshot();
       if (request !== generation.current.version) return;
+      revision.current = dataRevision;
       setSnapshot(data);
       hasLoaded.current = true;
       setNow(new Date());
@@ -41,7 +63,22 @@ export function HubrisProvider({ children }: { children: ReactNode }) {
     if (channel) channel.onmessage = (event: MessageEvent<unknown>) => {
       if (isDataChangedMessage(event.data)) void reload();
     };
-    const timer = setInterval(() => { void reload(); }, 60_000);
+    const timer = setInterval(() => {
+      void repository.readDataRevision().then((dataRevision) => {
+        if (cancelled) return;
+        if (revision.current !== dataRevision) {
+          void reload();
+          return;
+        }
+        const current = new Date();
+        setNow((previous) => formatDateKey(previous) !== formatDateKey(current)
+          || current.getTime() >= nextClockChange.current || current < previous ? current : previous);
+      }).catch((cause: unknown) => {
+        if (cancelled) return;
+        setError(cause instanceof Error ? cause.message : 'Could not read local data. Try again.');
+        setStatus(hasLoaded.current ? 'ready' : 'error');
+      });
+    }, 60_000);
     return () => {
       cancelled = true;
       requests.version++;
@@ -64,7 +101,7 @@ export function HubrisProvider({ children }: { children: ReactNode }) {
       deleteActivity: (id) => write(() => repository.deleteActivity(id)),
       logActivity: (id, note) => write(() => repository.addLog(id, note)),
       // Undo reverses the newly created log; restoreLog remains available for deletion undo.
-      undoLog: (log) => write(() => repository.deleteLog(log.id)),
+      undoLog: (log) => write(() => repository.undoLog(log)),
       deleteLog: (id) => write(() => repository.deleteLog(id)),
       exportBackup: async () => { downloadBackup(await exportData()); },
       importBackup: async (file, mode) => {
@@ -78,13 +115,16 @@ export function HubrisProvider({ children }: { children: ReactNode }) {
     };
   }, [reload]);
 
-  const value = useMemo<HubrisState>(() => ({
-    status, error, now, ...snapshot, actions,
+  const scores = useMemo(() => ({
     report: computeWeeklyReport(snapshot.activities, snapshot.logs, now),
     suggestions: generateWeeklySuggestions(snapshot.activities, snapshot.logs, now),
     trend: computeWeeklyTrend(snapshot.activities, snapshot.logs, now, 8),
     heatmap: generateLogHeatmap(snapshot.logs, 84, getWeekBounds(now).end),
-  }), [status, error, now, snapshot, actions]);
+  }), [now, snapshot]);
+
+  const value = useMemo<HubrisState>(() => ({
+    status, error, now, ...snapshot, actions, ...scores,
+  }), [status, error, now, snapshot, actions, scores]);
 
   return <HubrisContext.Provider value={value}>{children}</HubrisContext.Provider>;
 }

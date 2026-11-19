@@ -26,6 +26,7 @@ export function demoData(now = new Date()) {
   const activities = examples.map(([slug, name, category, timesPerWeek, importance]) => ({
     id: `demo-${slug}`, name, category, timesPerWeek, importance,
     archived: false, createdAt, updatedAt: createdAt,
+    versions: [{ from: createdAt, category, timesPerWeek, importance, archived: false }],
   }));
   const logs = [];
   for (let week = 0; week < 8; week += 1) {

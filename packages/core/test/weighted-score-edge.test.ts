@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TrackedActivity } from '@hubris/types';
 import {
-    activityScore, categoryScore, computeWeeklyReport, computeWeeklyTrend,
+    activityScore, activityVersionAt, categoryScore, computeWeeklyReport, computeWeeklyTrend,
     getWeekBounds, overallScore,
 } from '../src/index';
 
@@ -13,6 +13,69 @@ afterAll(() => {
 });
 
 describe('weekly scoring boundaries', () => {
+    it('selects the latest activity version in effect at a moment and supports legacy activities', () => {
+        const legacy: TrackedActivity = {
+            id: 'a', name: 'A', category: 'career', timesPerWeek: 5,
+            importance: 'high', archived: false,
+            createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-18T00:00:00.000Z',
+        };
+        const revised: TrackedActivity = {
+            ...legacy,
+            timesPerWeek: 2,
+            versions: [
+                { from: legacy.createdAt, category: 'career', timesPerWeek: 5, importance: 'high', archived: false },
+                { from: '2026-11-16T12:00:00.000Z', category: 'career', timesPerWeek: 2, importance: 'high', archived: false },
+            ],
+        };
+
+        expect(activityVersionAt(revised, new Date('2026-10-31T23:59:59.999Z'))).toBeNull();
+        expect(activityVersionAt(revised, new Date('2026-11-15T23:59:59.999Z'))?.timesPerWeek).toBe(5);
+        expect(activityVersionAt(revised, new Date('2026-11-16T12:00:00.000Z'))?.timesPerWeek).toBe(2);
+        expect(activityVersionAt(legacy, new Date('2026-11-02T00:00:00.000Z'))?.timesPerWeek).toBe(5);
+    });
+
+    it('keeps past goals and categories unchanged after this week edits', () => {
+        const activity: TrackedActivity = {
+            id: 'a', name: 'A', category: 'health', timesPerWeek: 1,
+            importance: 'low', archived: false,
+            createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-18T12:00:00.000Z',
+            versions: [
+                { from: '2026-11-01T00:00:00.000Z', category: 'career', timesPerWeek: 5, importance: 'high', archived: false },
+                { from: '2026-11-18T12:00:00.000Z', category: 'health', timesPerWeek: 1, importance: 'low', archived: false },
+            ],
+        };
+        const logs = [
+            { id: 'past-1', activityId: 'a', loggedAt: '2026-11-10T09:00:00.000Z' },
+            { id: 'past-2', activityId: 'a', loggedAt: '2026-11-11T09:00:00.000Z' },
+            { id: 'current', activityId: 'a', loggedAt: '2026-11-18T13:00:00.000Z' },
+        ];
+
+        const past = computeWeeklyReport([activity], logs, new Date('2026-11-15T12:00:00.000Z'));
+        expect(past.categories.career.activities[0]).toMatchObject({ goal: 5, done: 2, importance: 'high' });
+        expect(past.categories.health.activities).toEqual([]);
+        const current = computeWeeklyReport([activity], logs, new Date('2026-11-19T12:00:00.000Z'));
+        expect(current.categories.career.activities).toEqual([]);
+        expect(current.categories.health.activities[0]).toMatchObject({ goal: 1, done: 1, importance: 'low' });
+    });
+
+    it('keeps an activity in past reports after it is archived this week', () => {
+        const activity: TrackedActivity = {
+            id: 'a', name: 'A', category: 'career', timesPerWeek: 1,
+            importance: 'high', archived: true,
+            createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-18T12:00:00.000Z',
+            versions: [
+                { from: '2026-11-01T00:00:00.000Z', category: 'career', timesPerWeek: 1, importance: 'high', archived: false },
+                { from: '2026-11-18T12:00:00.000Z', category: 'career', timesPerWeek: 1, importance: 'high', archived: true },
+            ],
+        };
+        const logs = [{ id: 'past', activityId: 'a', loggedAt: '2026-11-10T09:00:00.000Z' }];
+
+        expect(computeWeeklyReport([activity], logs, new Date('2026-11-15T12:00:00.000Z'))
+            .categories.career.activities).toHaveLength(1);
+        expect(computeWeeklyReport([activity], logs, new Date('2026-11-19T12:00:00.000Z'))
+            .categories.career.activities).toEqual([]);
+    });
+
     it.each([
         [1, 0, 100], [1, -1, 100], [NaN, 1, 100], [Infinity, 1, 100],
         [1, NaN, 100], [1, Infinity, 100], [1, 1, NaN], [1, 1, Infinity],
