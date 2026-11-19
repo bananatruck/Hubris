@@ -32,7 +32,7 @@ export function Toast({
       <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {newest ? [newest.message, newest.errorMessage].filter(Boolean).join(' ') : ''}
       </div>
-      <div className="fixed bottom-16 left-3 right-3 z-50 mx-auto flex max-w-[356px] flex-col gap-2">
+      <div className="fixed bottom-16 left-3 right-3 z-50 mx-auto flex max-h-[calc(100dvh-5rem)] max-w-[356px] flex-col gap-2 overflow-y-auto">
         {toasts.map((toast) => (
           <ToastMessage
             key={toast.id}

@@ -185,7 +185,7 @@ it('expires each recent log on its own timer', async () => {
   expect(screen.getByRole('button', { name: 'Undo Reading' })).toBeTruthy();
 });
 
-it('keeps only the three newest log toasts', async () => {
+it('keeps every recent log undoable when more than three logs are added', async () => {
   vi.useFakeTimers();
   const activities = ['Alpha', 'Beta', 'Gamma', 'Delta'].map((name, index) => ({
     ...activity,
@@ -210,8 +210,7 @@ it('keeps only the three newest log toasts', async () => {
     });
   }
 
-  expect(screen.queryByRole('button', { name: 'Undo Alpha' })).toBeNull();
-  for (const name of ['Beta', 'Gamma', 'Delta']) {
+  for (const name of ['Alpha', 'Beta', 'Gamma', 'Delta']) {
     expect(screen.getByRole('button', { name: `Undo ${name}` })).toBeTruthy();
   }
 });
@@ -435,10 +434,10 @@ it.each(['Start blank', 'Start with an example'])('locks earlier onboarding step
   expect(actions.completeOnboarding).toHaveBeenCalledTimes(1);
 });
 
-it('explains that Merge restores deleted items only in Merge import confirmation', () => {
+it('explains that Merge keeps deletions from either side only in Merge import confirmation', () => {
   setup();
   fireEvent.click(screen.getByRole('tab', { name: 'Settings' }));
-  const copy = 'Merge adds everything in the file that is missing here, including items you deleted after this backup was made.';
+  const copy = 'Merge adds what is missing here and keeps deletions made on either side.';
   fireEvent.click(screen.getByRole('radio', { name: 'Merge' }));
   expect(screen.queryByText(copy)).toBeNull();
   fireEvent.change(screen.getByLabelText('Import backup file'), { target: { files: [new File(['{}'], 'backup.json')] } });

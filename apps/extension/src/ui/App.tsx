@@ -16,7 +16,6 @@ import { HistoryScreen } from './screens/HistoryScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 
 type TabValue = 'today' | 'trends' | 'history' | 'settings';
-const MAX_TOASTS = 3;
 
 const NAV_ITEMS: readonly AceternityTabItem[] = [
   { value: 'today', label: 'Today', icon: <CalendarCheck2 className="h-4 w-4" /> },
@@ -79,7 +78,7 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
   }, [canShowSidePanelButton]);
 
   const addToast = useCallback((toast: ToastData) => {
-    setToasts((current) => [...current, toast].slice(-MAX_TOASTS));
+    setToasts((current) => [...current, toast]);
   }, []);
 
   const notify = useCallback((notification: Notification) => {
@@ -101,7 +100,7 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
   const handleLogged = useCallback(
     (activityName: string, log: ActivityLog) => {
       addToast({
-        id: crypto.randomUUID(),
+        id: log.id,
         tone: 'info',
         message: `${activityName} logged`,
         undoLabel: `Undo ${activityName}`,
