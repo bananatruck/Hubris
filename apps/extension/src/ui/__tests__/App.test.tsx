@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { HubrisProvider } from '../../state/HubrisProvider';
+import { useHubris } from '../../state/useHubris';
 import {
   completeOnboarding,
   addLog,
@@ -11,8 +12,14 @@ import {
   listLogs,
   ValidationError,
 } from '../../storage/repository';
+import * as repository from '../../storage/repository';
 import { App } from '../App';
 import { ActivityForm } from '../components/ActivityForm';
+
+function RefreshButton() {
+  const { actions } = useHubris();
+  return <button onClick={() => void actions.retry()}>Refresh data</button>;
+}
 
 beforeEach(async () => {
   await eraseAll();
@@ -21,6 +28,7 @@ beforeEach(async () => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe('Hubris UI', () => {
@@ -62,9 +70,11 @@ describe('Hubris UI', () => {
     const logButton = await screen.findByRole('button', {
       name: 'Log Leetcode, 0 of 5 this week',
     });
+    expect(screen.getByRole('img', { name: /Overall weekly score 0,/ })).toBeTruthy();
     fireEvent.click(logButton);
 
     await screen.findByText('Leetcode logged');
+    await screen.findByRole('img', { name: /Overall weekly score 4,/ });
     await screen.findByRole('button', {
       name: 'Log Leetcode, 1 of 5 this week',
     });
@@ -78,6 +88,51 @@ describe('Hubris UI', () => {
     await screen.findByRole('button', {
       name: 'Log Leetcode, 0 of 5 this week',
     });
+    expect(screen.getByRole('img', { name: /Overall weekly score 0,/ })).toBeTruthy();
+  });
+
+  it('keeps an open draft mounted and shows a retry alert when refresh fails', async () => {
+    await completeOnboarding(false);
+    const readSnapshot = vi.spyOn(repository, 'readSnapshot');
+    render(
+      <HubrisProvider>
+        <RefreshButton />
+        <App surface="popup" />
+      </HubrisProvider>,
+    );
+    const refreshButton = await screen.findByRole('button', { name: 'Refresh data' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Add activity' }));
+    fireEvent.change(screen.getByLabelText('Activity name'), { target: { value: 'Unsubmitted draft' } });
+
+    readSnapshot.mockRejectedValueOnce(new Error('Refresh failed.'));
+    fireEvent.click(refreshButton);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Refresh failed.');
+    expect(screen.getByLabelText('Activity name')).toHaveValue('Unsubmitted draft');
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    expect(screen.getByLabelText('Activity name')).toHaveValue('Unsubmitted draft');
+  });
+
+  it('returns to the optional activity step after retrying a failed starter refresh', async () => {
+    const readSnapshot = vi.spyOn(repository, 'readSnapshot');
+    render(
+      <HubrisProvider>
+        <App surface="popup" />
+      </HubrisProvider>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Next' }));
+    readSnapshot.mockRejectedValue(new Error('Refresh failed.'));
+    fireEvent.click(screen.getByRole('button', { name: /Start blank/ }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Refresh failed.');
+    expect(screen.getByText('Add a weekly activity')).toBeTruthy();
+    readSnapshot.mockRestore();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    expect(screen.getByText('Add a weekly activity')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Skip for now' })).toBeTruthy();
   });
 
   it('lists weekly suggestions with their exact action names', async () => {

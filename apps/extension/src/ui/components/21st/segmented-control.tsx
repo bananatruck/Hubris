@@ -18,6 +18,7 @@ export interface SegmentedControlProps<T extends string> {
   ariaLabel: string;
   layoutId?: string;
   className?: string;
+  disabled?: boolean;
 }
 
 export function SegmentedControl<T extends string>({
@@ -27,6 +28,7 @@ export function SegmentedControl<T extends string>({
   ariaLabel,
   layoutId,
   className,
+  disabled = false,
 }: SegmentedControlProps<T>) {
   const buttons = useRef(new Map<T, HTMLButtonElement>());
   const prefersReducedMotion = useReducedMotion();
@@ -35,6 +37,7 @@ export function SegmentedControl<T extends string>({
     <div
       role="radiogroup"
       aria-label={ariaLabel}
+      aria-disabled={disabled || undefined}
       className={cn(
         'grid gap-1 rounded-lg border border-line bg-ink p-1',
         options.length === 2 ? 'grid-cols-2' : options.length === 4 ? 'grid-cols-4' : 'grid-cols-3',
@@ -49,6 +52,7 @@ export function SegmentedControl<T extends string>({
             type="button"
             role="radio"
             aria-checked={selected}
+            disabled={disabled}
             tabIndex={selected ? 0 : -1}
             ref={(element) => {
               if (element) buttons.current.set(option.value, element);
@@ -67,7 +71,7 @@ export function SegmentedControl<T extends string>({
             }}
             onClick={() => onChange(option.value)}
             className={cn(
-              'relative flex flex-col items-center justify-center rounded-md px-2 py-1.5 text-xs font-medium transition-colors cursor-pointer',
+              'relative flex flex-col items-center justify-center rounded-md px-2 py-1.5 text-xs font-medium transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft',
               selected ? 'text-text' : 'text-muted hover:text-text',
             )}

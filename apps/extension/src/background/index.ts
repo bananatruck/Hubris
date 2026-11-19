@@ -1,9 +1,10 @@
 import { computeWeeklyReport } from '@hubris/core';
 import { readSnapshot } from '../storage/repository';
 import { isDataChangedMessage } from '../shared/messages';
-import { getBadgeState } from './badge';
+import { getBadgeState, getNextMondayTime } from './badge';
 
 const ALARM_NAME = 'hubris/refresh-badge';
+const MONDAY_ALARM_NAME = 'hubris/refresh-badge-monday';
 
 export async function refreshBadge() {
   const { activities, logs } = await readSnapshot();
@@ -21,12 +22,16 @@ function refresh() {
     // The next alarm retries when storage is available again.
   });
 }
+async function scheduleMondayAlarm() {
+  await chrome.alarms.create(MONDAY_ALARM_NAME, { when: getNextMondayTime() });
+}
 async function initialize() {
   try {
     // Re-creating an existing alarm would restart its period on every worker wake.
     if (await chrome.alarms.get(ALARM_NAME) === undefined) {
       await chrome.alarms.create(ALARM_NAME, { periodInMinutes: 15 });
     }
+    await scheduleMondayAlarm();
   } finally {
     refresh();
   }
@@ -43,5 +48,11 @@ chrome.runtime.onMessage.addListener((message: unknown) => {
 });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM_NAME) refresh();
+  if (alarm.name === MONDAY_ALARM_NAME) {
+    void scheduleMondayAlarm().catch(() => {
+      // Startup and the fallback alarm will retry scheduling.
+    });
+    refresh();
+  }
 });
 start();

@@ -1,6 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ActivityLog } from '@hubris/types';
-import { formatDateKey, generateHeatmapData, generateLogHeatmap } from '../src/heatmap';
+import { formatDateKey, generateHeatmapData, generateLogHeatmap, getDateRange } from '../src/heatmap';
+
+const originalTimezone = process.env.TZ;
+beforeAll(() => { process.env.TZ = 'America/New_York'; });
+afterAll(() => {
+    if (originalTimezone === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTimezone;
+});
 
 describe('local calendar dates', () => {
     it('keeps a 21:00 log on its local calendar day', () => {
@@ -45,6 +52,12 @@ describe('generateLogHeatmap', () => {
         expect(generateLogHeatmap([], 0, new Date(2026, 0, 1))).toEqual([]);
     });
 
+    it.each([-1, 1.5, NaN, Infinity])('rejects an invalid day count: %s', (days) => {
+        const endDate = new Date(2026, 0, 1);
+        expect(() => getDateRange(days, endDate)).toThrow(RangeError);
+        expect(() => generateLogHeatmap([], days, endDate)).toThrow(RangeError);
+    });
+
     it('keeps consecutive local days across the DST transition', () => {
         const logs = [0, 1, 2].map((offset) => ({
             id: String(offset), activityId: 'a',
@@ -52,5 +65,10 @@ describe('generateLogHeatmap', () => {
         }));
         expect(generateLogHeatmap(logs, 3, new Date(2026, 10, 2)).map((cell) => [cell.date, cell.value]))
             .toEqual([['2026-10-31', 1], ['2026-11-01', 1], ['2026-11-02', 1]]);
+    });
+
+    it('keeps the local day before midnight after spring-forward', () => {
+        expect(generateLogHeatmap([], 2, new Date(2026, 2, 9)).map((cell) => cell.date))
+            .toEqual(['2026-03-08', '2026-03-09']);
     });
 });

@@ -28,6 +28,8 @@ describe('repository', () => {
     await repo.deleteLog(log.id);
     expect(await repo.listLogs()).toEqual([retained]);
     await repo.restoreLog(log);
+    expect(await repo.listLogs()).toEqual(expect.arrayContaining([log, retained]));
+    expect(await repo.listLogs()).toHaveLength(2);
     await repo.deleteActivity(first.id);
     expect(await repo.listLogs()).toEqual([retained]);
   });
@@ -60,6 +62,8 @@ describe('repository', () => {
     await repo.completeOnboarding(true);
     expect((await repo.listActivities()).map((activity) => activity.name).sort()).toEqual(['Classes', 'Leetcode']);
     expect(await repo.getMeta('onboardingComplete')).toBe(true);
+    const activity = (await repo.listActivities())[0];
+    await repo.addLog(activity.id);
     await repo.setMeta('other', true);
     await repo.eraseAll();
     expect(await repo.getMeta('other')).toBeUndefined();

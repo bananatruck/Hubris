@@ -8,6 +8,7 @@ export interface ToastData {
   message: string;
   tone?: 'info' | 'error';
   onUndo?: () => void;
+  errorMessage?: string;
 }
 
 export interface ToastProps {
@@ -68,7 +69,14 @@ function ToastMessage({ toast, onDismiss, durationMs, className }: ToastProps & 
         className,
       )}
     >
-      <span className="font-medium">{toast.message}</span>
+      <span className="min-w-0 font-medium">
+        <span className="block">{toast.message}</span>
+        {toast.errorMessage && (
+          <span role="alert" className="mt-0.5 block text-red-200">
+            {toast.errorMessage}
+          </span>
+        )}
+      </span>
       {toast.tone !== 'error' && toast.onUndo && (
         <button
           type="button"

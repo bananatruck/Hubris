@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useId, useRef, useState, type ChangeEvent } from 'react';
 import { Archive, ArchiveRestore, Download, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import type { TrackedActivity } from '@hubris/types';
 import { useHubris } from '../../state/useHubris';
@@ -31,7 +31,13 @@ export function SettingsScreen() {
   const { activities, actions } = useHubris();
 
   const [addOpen, setAddOpen] = useState(false);
-  const [editingActivity, setEditingActivity] = useState<TrackedActivity | null>(null);
+  // Each open of the edit dialog is a new session, so a slow save from an earlier
+  // session (even for the same activity) cannot close a newer draft.
+  const editSessions = useRef(0);
+  const [editing, setEditing] = useState<{ activity: TrackedActivity; session: number } | null>(null);
+  const editingActivity = editing?.activity ?? null;
+  const closeEditSession = (session?: number) => setEditing((current) =>
+    session === undefined || current?.session === session ? null : current);
   const [deletingActivity, setDeletingActivity] = useState<TrackedActivity | null>(null);
 
   const [importMode, setImportMode] = useState<'replace' | 'merge'>('replace');
@@ -51,6 +57,14 @@ export function SettingsScreen() {
     setImportErrors([]);
   };
 
+  // Set on a successful import; acted on once `importing` clears and the input is enabled again.
+  const restoreFileFocus = useRef(false);
+  useEffect(() => {
+    if (importing || !restoreFileFocus.current) return;
+    restoreFileFocus.current = false;
+    fileInput.current?.focus();
+  }, [importing]);
+
   const handleConfirmImport = async () => {
     if (!selectedFile) return;
     setImporting(true);
@@ -62,7 +76,8 @@ export function SettingsScreen() {
         `Imported ${counts.activities} ${counts.activities === 1 ? 'activity' : 'activities'} and ${counts.logs} ${counts.logs === 1 ? 'log' : 'logs'}.`,
       );
       setSelectedFile(null);
-      fileInput.current?.focus();
+      // The input is still disabled here; the effect above focuses it once `importing` clears.
+      restoreFileFocus.current = true;
     } catch (error) {
       const message = errorMessage(error);
       setImportErrors(message.split('\n').filter((line) => line.trim().length > 0));
@@ -154,7 +169,7 @@ export function SettingsScreen() {
                       variant="ghost"
                       size="icon"
                       aria-label={`Edit ${activity.name}`}
-                      onClick={() => setEditingActivity(activity)}
+                      onClick={() => setEditing({ activity, session: ++editSessions.current })}
                     >
                       <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
                     </Button>
@@ -223,12 +238,14 @@ export function SettingsScreen() {
               value={importMode}
               onChange={setImportMode}
               layoutId="settings-import-mode"
+              disabled={importing}
             />
 
             <div className="space-y-2">
               <label
                 htmlFor={fileInputId}
-                className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-line bg-raised/60 px-3 py-2 text-xs font-medium text-text hover:bg-raised"
+                aria-disabled={importing || undefined}
+                className={`flex items-center justify-center gap-2 rounded-lg border border-dashed border-line bg-raised/60 px-3 py-2 text-xs font-medium text-text ${importing ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-raised'}`}
               >
                 <Upload className="h-3.5 w-3.5 text-accent-soft" aria-hidden="true" />
                 <span>{selectedFile ? selectedFile.name : 'Choose backup JSON file'}</span>
@@ -239,6 +256,7 @@ export function SettingsScreen() {
                 aria-label="Import backup file"
                 type="file"
                 accept=".json,application/json"
+                disabled={importing}
                 onChange={handleFileChange}
                 className="sr-only"
               />
@@ -259,6 +277,7 @@ export function SettingsScreen() {
                   <Button
                     variant="secondary"
                     size="sm"
+                    disabled={importing}
                     onClick={() => { setSelectedFile(null); fileInput.current?.focus(); }}
                   >
                     Cancel
@@ -349,7 +368,7 @@ export function SettingsScreen() {
       <Dialog
         open={editingActivity !== null}
         onOpenChange={(open) => {
-          if (!open) setEditingActivity(null);
+          if (!open) closeEditSession();
         }}
       >
         <DialogContent
@@ -357,7 +376,7 @@ export function SettingsScreen() {
           title="Edit activity"
           description="Update the activity details and weekly target."
         >
-          {editingActivity && (
+          {editing && editingActivity && (
             <ActivityForm
               initialValues={{
                 name: editingActivity.name,
@@ -366,9 +385,9 @@ export function SettingsScreen() {
                 importance: editingActivity.importance,
               }}
               submitLabel="Save changes"
-              onCancel={() => setEditingActivity(null)}
+              onCancel={() => closeEditSession()}
               onSubmit={(patch) => actions.updateActivity(editingActivity.id, patch)}
-              onSuccess={() => setEditingActivity(null)}
+              onSuccess={() => closeEditSession(editing.session)}
             />
           )}
         </DialogContent>

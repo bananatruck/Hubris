@@ -1,9 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TrackedActivity } from '@hubris/types';
 import {
     activityScore, categoryScore, computeWeeklyReport, computeWeeklyTrend,
     getWeekBounds, overallScore,
 } from '../src/index';
+
+const originalTimezone = process.env.TZ;
+beforeAll(() => { process.env.TZ = 'America/New_York'; });
+afterAll(() => {
+    if (originalTimezone === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTimezone;
+});
 
 describe('weekly scoring boundaries', () => {
     it.each([
@@ -135,6 +142,14 @@ describe('weekly scoring boundaries', () => {
             new Date(2026, 10, 8, 23, 59, 59, 999).getTime(),
         ]);
         expect(reference.getTime()).toBe(original);
+    });
+
+    it('keeps consecutive local week starts across spring-forward', () => {
+        const trend = computeWeeklyTrend([], [], new Date(2026, 2, 9), 2);
+        expect(trend.map((point) => new Date(point.weekStart).toString())).toEqual([
+            new Date(2026, 2, 2).toString(),
+            new Date(2026, 2, 9).toString(),
+        ]);
     });
 
     it('supports zero weeks and rejects invalid week counts', () => {

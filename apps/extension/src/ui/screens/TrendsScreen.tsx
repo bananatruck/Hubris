@@ -1,5 +1,5 @@
 import { formatDateKey } from '@hubris/core';
-import { useState } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import type { DayHeatmapCell } from '@hubris/types';
 import { useHubris } from '../../state/useHubris';
 import { CATEGORIES } from '../lib/categories';
@@ -33,7 +33,20 @@ function parseLocalWeekday(dateKey: string): number {
 
 export function TrendsScreen() {
   const { logs, report, trend, heatmap, now } = useHubris();
-  const [activeCell, setActiveCell] = useState<DayHeatmapCell | null>(null);
+  const [activeDate, setActiveDate] = useState<string | null>(null);
+  const todayKey = formatDateKey(now);
+  const [tabStopDate, setTabStopDate] = useState<string | null>(() =>
+    heatmap.find((cell) => cell.date === todayKey)?.date
+      ?? heatmap[0]?.date
+      ?? null,
+  );
+  const heatmapButtons = useRef(new Map<string, HTMLButtonElement>());
+  const activeCell = activeDate === null
+    ? null
+    : heatmap.find((cell) => cell.date === activeDate) ?? null;
+  const effectiveTabStopDate = heatmap.some((cell) => cell.date === tabStopDate)
+    ? tabStopDate
+    : heatmap.find((cell) => cell.date === todayKey)?.date ?? heatmap[0]?.date ?? null;
 
   const currentWeekPoint = trend[trend.length - 1];
   const previousWeekPoint = trend.length >= 2 ? trend[trend.length - 2] : undefined;
@@ -41,6 +54,21 @@ export function TrendsScreen() {
   const allActivities = CATEGORIES.flatMap((cat) => report.categories[cat.id].activities);
   const totalGoalUnits = allActivities.reduce((sum, a) => sum + a.goal, 0);
   const totalDoneUnits = allActivities.reduce((sum, a) => sum + Math.min(a.done, a.goal), 0);
+
+  const handleHeatmapKeyDown = (event: KeyboardEvent<HTMLButtonElement>, date: string) => {
+    const index = heatmap.findIndex((cell) => cell.date === date);
+    const offset = {
+      ArrowLeft: -7,
+      ArrowRight: 7,
+      ArrowUp: -1,
+      ArrowDown: 1,
+    }[event.key];
+    if (index < 0 || offset === undefined) return;
+    const next = heatmap[index + offset];
+    if (!next) return;
+    event.preventDefault();
+    heatmapButtons.current.get(next.date)?.focus();
+  };
 
   return (
     <div className="space-y-4">
@@ -128,12 +156,15 @@ export function TrendsScreen() {
             {trend.map((point, index) => {
               const isCurrent = index === trend.length - 1;
               const rangeLabel = formatWeekRange(point.weekStart, point.weekEnd);
-              const careerContrib = (point.categories.career ?? 0) * 0.36;
-              const healthContrib = (point.categories.health ?? 0) * 0.36;
-              const hobbiesContrib = (point.categories['hobbies-habits'] ?? 0) * 0.28;
+              const contributions = CATEGORIES.map((category) => ({
+                category,
+                value: (point.categories[category.id] ?? 0) * category.weight,
+              }));
               const overallRounded = Math.round(point.overall);
 
-              const barAria = `${rangeLabel}${isCurrent ? ' (current week)' : ''}: overall score ${overallRounded}, Career contribution ${Math.round(careerContrib)}, Health contribution ${Math.round(healthContrib)}, Hobbies contribution ${Math.round(hobbiesContrib)}`;
+              const barAria = `${rangeLabel}${isCurrent ? ' (current week)' : ''}: overall score ${overallRounded}, ${contributions
+                .map(({ category, value }) => `${category.label} contribution ${Math.round(value)}`)
+                .join(', ')}`;
 
               return (
                 <div
@@ -159,24 +190,15 @@ export function TrendsScreen() {
                     }
                     style={{ height: '100%' }}
                   >
-                    <div
-                      style={{
-                        height: `${Math.max(0, Math.min(100, careerContrib))}%`,
-                        backgroundColor: 'var(--color-career)',
-                      }}
-                    />
-                    <div
-                      style={{
-                        height: `${Math.max(0, Math.min(100, healthContrib))}%`,
-                        backgroundColor: 'var(--color-health)',
-                      }}
-                    />
-                    <div
-                      style={{
-                        height: `${Math.max(0, Math.min(100, hobbiesContrib))}%`,
-                        backgroundColor: 'var(--color-hobbies)',
-                      }}
-                    />
+                    {contributions.map(({ category, value }) => (
+                      <div
+                        key={category.id}
+                        style={{
+                          height: `${Math.max(0, Math.min(100, value))}%`,
+                          backgroundColor: category.tokenVar,
+                        }}
+                      />
+                    ))}
                   </div>
                 </div>
               );
@@ -254,18 +276,27 @@ export function TrendsScreen() {
                 </span>
                 <div className="grid grid-cols-12 gap-1">
                   {rowCells.map((cell) => {
-                    const upcoming = cell.date > formatDateKey(now);
+                    const upcoming = cell.date > todayKey;
                     const label = upcoming ? `${formatHeatmapDate(cell.date)}, upcoming` : `${formatHeatmapDate(cell.date)}: ${cell.logCount} ${cell.logCount === 1 ? 'log' : 'logs'}`;
                     return (
                       <button
                         key={cell.date}
+                        ref={(button) => {
+                          if (button) heatmapButtons.current.set(cell.date, button);
+                          else heatmapButtons.current.delete(cell.date);
+                        }}
                         type="button"
                         title={label}
                         aria-label={label}
-                        onMouseEnter={() => setActiveCell(upcoming ? null : cell)}
-                        onFocus={() => setActiveCell(upcoming ? null : cell)}
-                        onMouseLeave={() => setActiveCell(null)}
-                        onBlur={() => setActiveCell(null)}
+                        tabIndex={cell.date === effectiveTabStopDate ? 0 : -1}
+                        onMouseEnter={() => setActiveDate(upcoming ? null : cell.date)}
+                        onFocus={() => {
+                          setTabStopDate(cell.date);
+                          setActiveDate(upcoming ? null : cell.date);
+                        }}
+                        onMouseLeave={() => setActiveDate(null)}
+                        onBlur={() => setActiveDate(null)}
+                        onKeyDown={(event) => handleHeatmapKeyDown(event, cell.date)}
                         className={`aspect-square w-full rounded-[3px] border transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft ${upcoming ? 'bg-transparent border-line' : INTENSITY_STYLES[cell.intensity]}`}
                       />
                     );
