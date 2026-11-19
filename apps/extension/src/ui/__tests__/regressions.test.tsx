@@ -359,3 +359,17 @@ it('explains that Merge restores deleted items only in Merge import confirmation
   fireEvent.click(screen.getByRole('radio', { name: 'Replace' }));
   expect(screen.queryByText(copy)).toBeNull();
 });
+
+it('returns focus to the enabled file input after a successful import', async () => {
+  setup();
+  fireEvent.click(screen.getByRole('tab', { name: 'Settings' }));
+  const input = screen.getByLabelText('Import backup file');
+  fireEvent.change(input, { target: { files: [new File(['{}'], 'backup.json')] } });
+  const confirm = screen.getByRole('button', { name: 'Confirm import' });
+  confirm.focus();
+  fireEvent.click(confirm);
+
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'Confirm import' })).toBeNull());
+  expect(input).toBeEnabled();
+  await waitFor(() => expect(document.activeElement).toBe(input));
+});

@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useId, useRef, useState, type ChangeEvent } from 'react';
 import { Archive, ArchiveRestore, Download, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import type { TrackedActivity } from '@hubris/types';
 import { useHubris } from '../../state/useHubris';
@@ -51,6 +51,14 @@ export function SettingsScreen() {
     setImportErrors([]);
   };
 
+  // Set on a successful import; acted on once `importing` clears and the input is enabled again.
+  const restoreFileFocus = useRef(false);
+  useEffect(() => {
+    if (importing || !restoreFileFocus.current) return;
+    restoreFileFocus.current = false;
+    fileInput.current?.focus();
+  }, [importing]);
+
   const handleConfirmImport = async () => {
     if (!selectedFile) return;
     setImporting(true);
@@ -62,7 +70,8 @@ export function SettingsScreen() {
         `Imported ${counts.activities} ${counts.activities === 1 ? 'activity' : 'activities'} and ${counts.logs} ${counts.logs === 1 ? 'log' : 'logs'}.`,
       );
       setSelectedFile(null);
-      fileInput.current?.focus();
+      // The input is still disabled here; the effect above focuses it once `importing` clears.
+      restoreFileFocus.current = true;
     } catch (error) {
       const message = errorMessage(error);
       setImportErrors(message.split('\n').filter((line) => line.trim().length > 0));
