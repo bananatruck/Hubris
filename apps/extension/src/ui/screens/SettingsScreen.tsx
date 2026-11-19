@@ -31,7 +31,13 @@ export function SettingsScreen() {
   const { activities, actions } = useHubris();
 
   const [addOpen, setAddOpen] = useState(false);
-  const [editingActivity, setEditingActivity] = useState<TrackedActivity | null>(null);
+  // Each open of the edit dialog is a new session, so a slow save from an earlier
+  // session (even for the same activity) cannot close a newer draft.
+  const editSessions = useRef(0);
+  const [editing, setEditing] = useState<{ activity: TrackedActivity; session: number } | null>(null);
+  const editingActivity = editing?.activity ?? null;
+  const closeEditSession = (session?: number) => setEditing((current) =>
+    session === undefined || current?.session === session ? null : current);
   const [deletingActivity, setDeletingActivity] = useState<TrackedActivity | null>(null);
 
   const [importMode, setImportMode] = useState<'replace' | 'merge'>('replace');
@@ -163,7 +169,7 @@ export function SettingsScreen() {
                       variant="ghost"
                       size="icon"
                       aria-label={`Edit ${activity.name}`}
-                      onClick={() => setEditingActivity(activity)}
+                      onClick={() => setEditing({ activity, session: ++editSessions.current })}
                     >
                       <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
                     </Button>
@@ -362,7 +368,7 @@ export function SettingsScreen() {
       <Dialog
         open={editingActivity !== null}
         onOpenChange={(open) => {
-          if (!open) setEditingActivity(null);
+          if (!open) closeEditSession();
         }}
       >
         <DialogContent
@@ -370,7 +376,7 @@ export function SettingsScreen() {
           title="Edit activity"
           description="Update the activity details and weekly target."
         >
-          {editingActivity && (
+          {editing && editingActivity && (
             <ActivityForm
               initialValues={{
                 name: editingActivity.name,
@@ -379,11 +385,9 @@ export function SettingsScreen() {
                 importance: editingActivity.importance,
               }}
               submitLabel="Save changes"
-              onCancel={() => setEditingActivity(null)}
+              onCancel={() => closeEditSession()}
               onSubmit={(patch) => actions.updateActivity(editingActivity.id, patch)}
-              onSuccess={() => setEditingActivity((current) =>
-                current?.id === editingActivity.id ? null : current
-              )}
+              onSuccess={() => closeEditSession(editing.session)}
             />
           )}
         </DialogContent>

@@ -373,3 +373,23 @@ it('returns focus to the enabled file input after a successful import', async ()
   expect(input).toBeEnabled();
   await waitFor(() => expect(document.activeElement).toBe(input));
 });
+
+it('does not close a reopened edit dialog for the same activity when an older save completes', async () => {
+  let resolveUpdate: (value: HubrisState['activities'][number]) => void = () => {};
+  const updateActivity = vi.fn<HubrisState['actions']['updateActivity']>(() => new Promise((resolve) => {
+    resolveUpdate = resolve;
+  }));
+  setup({}, { updateActivity });
+  fireEvent.click(screen.getByRole('tab', { name: 'Settings' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Edit Practice' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+  fireEvent.click(screen.getByRole('button', { name: 'Edit Practice' }));
+  fireEvent.change(screen.getByLabelText('Activity name'), { target: { value: 'Practice draft' } });
+  await act(async () => { resolveUpdate(activity); });
+
+  expect(screen.getByRole('dialog', { name: 'Edit activity' })).toBeTruthy();
+  expect(screen.getByLabelText('Activity name')).toHaveValue('Practice draft');
+});
