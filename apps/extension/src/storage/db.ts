@@ -1,5 +1,5 @@
 import { openDB, type DBSchema } from 'idb';
-import type { ActivityLog, TrackedActivity } from '@hubris/types';
+import type { ActivityLog, DeletionTombstone, TrackedActivity } from '@hubris/types';
 import { withTransaction } from './transaction';
 
 interface HubrisDatabase extends DBSchema {
@@ -12,7 +12,7 @@ interface HubrisDatabase extends DBSchema {
   meta: { key: string; value: boolean | number | string };
   deletions: {
     key: string;
-    value: { key: string; kind: 'activity' | 'log'; id: string; deletedAt: string };
+    value: DeletionTombstone;
   };
 }
 

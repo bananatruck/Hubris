@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as repo from './repository';
+import { getDB } from './db';
 import { computeWeeklyReport } from '@hubris/core';
 
 export const input = { name: '  Leetcode  ', category: 'career', timesPerWeek: 5, importance: 'high' } satisfies repo.CreateActivityInput;
@@ -76,6 +77,22 @@ describe('repository', () => {
     expect(await repo.listLogs()).toEqual([retained]);
   });
 
+  it('records deletion tombstones, removes restored log tombstones, and erases tombstones', async () => {
+    const activity = await repo.createActivity(input);
+    const log = await repo.addLog(activity.id);
+    await repo.deleteLog(log.id);
+    const db = await getDB();
+    expect(await db.get('deletions', `log:${log.id}`)).toMatchObject({ kind: 'log', id: log.id });
+    await repo.restoreLog(log);
+    expect(await db.get('deletions', `log:${log.id}`)).toBeUndefined();
+
+    await repo.deleteActivity(activity.id);
+    expect(await db.get('deletions', `activity:${activity.id}`)).toMatchObject({ kind: 'activity', id: activity.id });
+    expect(await db.get('deletions', `log:${log.id}`)).toMatchObject({ kind: 'log', id: log.id });
+    await repo.eraseAll();
+    expect(await db.getAll('deletions')).toEqual([]);
+  });
+
   it.each([
     { name: ' ' }, { name: 'x'.repeat(61) }, { timesPerWeek: 0 }, { timesPerWeek: 100 },
     { timesPerWeek: 1.5 }, { category: 'entertainment' }, { importance: 'urgent' },
@@ -112,4 +129,5 @@ describe('repository', () => {
     expect(await repo.listActivities()).toEqual([]);
     expect(await repo.listLogs()).toEqual([]);
   });
+
 });

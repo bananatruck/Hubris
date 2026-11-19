@@ -274,10 +274,18 @@ export interface WeeklyTrendPoint {
     categories: Record<ScoredCategory, number | null>;
 }
 
+export interface DeletionTombstone {
+    key: string;
+    kind: 'activity' | 'log';
+    id: string;
+    deletedAt: string; // ISO date
+}
+
 export interface HubrisExport {
     app: 'hubris';
-    schemaVersion: 1;
+    schemaVersion: 2;
     exportedAt: string; // ISO date
     activities: TrackedActivity[];
     logs: ActivityLog[];
+    deletions: DeletionTombstone[];
 }

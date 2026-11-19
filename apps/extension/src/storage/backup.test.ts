@@ -1,7 +1,9 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { HubrisExport } from '@hubris/types';
 import { computeWeeklyReport } from '@hubris/core';
-import { createActivity, addLog, eraseAll, listActivities, listLogs, getMeta, updateActivity } from './repository';
+import {
+  createActivity, addLog, deleteActivity, deleteLog, eraseAll, listActivities, listLogs, getMeta, updateActivity,
+} from './repository';
 import { createBackupDownload, exportData, importData, parseBackup } from './backup';
 
 beforeEach(eraseAll);
@@ -13,6 +15,8 @@ async function fixture() {
 
 it('round trips export, parse, replace and downloadable JSON', async () => {
   const data = await fixture();
+  expect(data.schemaVersion).toBe(2);
+  expect(data.deletions).toEqual([]);
   const parsed = parseBackup(JSON.stringify(data));
   expect(parsed).toEqual({ success: true, data });
   await createActivity({ name: 'Extra', category: 'career', timesPerWeek: 1, importance: 'low' });
@@ -74,7 +78,7 @@ it.each(['app', 'schemaVersion', 'dangling', 'duplicateActivity', 'duplicateLog'
   const data = await fixture();
   const variants: Record<string, unknown> = {
     app: { ...data, app: 'other' },
-    schemaVersion: { ...data, schemaVersion: 2 },
+    schemaVersion: { ...data, schemaVersion: 3 },
     dangling: { ...data, activities: [] },
     duplicateActivity: { ...data, activities: [...data.activities, ...data.activities] },
     duplicateLog: { ...data, logs: [...data.logs, ...data.logs] },
@@ -86,6 +90,153 @@ it.each(['app', 'schemaVersion', 'dangling', 'duplicateActivity', 'duplicateLog'
   if (!result.success) expect(result.errors.length).toBeGreaterThan(0);
   expect(await listActivities()).toEqual(data.activities);
 });
+
+it('keeps locally deleted activities and logs deleted when merging an older export', async () => {
+  const first = await createActivity({ name: 'First', category: 'career', timesPerWeek: 1, importance: 'high' });
+  const second = await createActivity({ name: 'Second', category: 'health', timesPerWeek: 1, importance: 'medium' });
+  const firstLog = await addLog(first.id);
+  const secondLog = await addLog(second.id);
+  const oldExport = await exportData();
+
+  await deleteActivity(first.id);
+  await deleteLog(secondLog.id);
+  await importData(oldExport, 'merge');
+
+  expect((await listActivities()).map(({ id }) => id)).toEqual([second.id]);
+  expect((await listLogs()).map(({ id }) => id)).not.toContain(firstLog.id);
+  expect((await listLogs()).map(({ id }) => id)).not.toContain(secondLog.id);
+});
+
+it('does not resurrect a deleted activity imported from an ahead clock', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-11-18T12:00:00.000Z'));
+  try {
+    const activity = await createActivity({ name: 'Ahead', category: 'career', timesPerWeek: 1, importance: 'high' });
+    const ahead = new Date(Date.now() + 10 * 60_000).toISOString();
+    const data = await exportData();
+    const aheadData: HubrisExport = {
+      ...data,
+      activities: data.activities.map((item) => ({ ...item, updatedAt: ahead })),
+    };
+    await importData(aheadData, 'merge');
+    await deleteActivity(activity.id);
+    await deleteActivity(activity.id);
+
+    await importData(aheadData, 'merge');
+
+    expect(await listActivities()).toEqual([]);
+    expect((await exportData()).deletions.find(({ key }) => key === `activity:${activity.id}`)?.deletedAt)
+      .toBe(new Date(Date.parse(ahead) + 1).toISOString());
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('does not import a log when its activity is suppressed by a tombstone', async () => {
+  const activity = await createActivity({ name: 'Deleted', category: 'career', timesPerWeek: 1, importance: 'high' });
+  const oldExport = await exportData();
+  oldExport.logs.push({ id: 'remote-log', activityId: activity.id, loggedAt: oldExport.exportedAt });
+  await deleteActivity(activity.id);
+
+  await importData(oldExport, 'merge');
+
+  expect(await listActivities()).toEqual([]);
+  expect(await listLogs()).toEqual([]);
+  expect(parseBackup(JSON.stringify(await exportData())).success).toBe(true);
+});
+
+it('exports activities, logs, and deletions from one transaction', async () => {
+  await fixture();
+  const transaction = vi.spyOn(IDBDatabase.prototype, 'transaction');
+  transaction.mockClear();
+
+  await exportData();
+
+  expect(transaction).toHaveBeenCalledTimes(1);
+  expect(transaction.mock.calls[0]?.[0]).toEqual(['activities', 'logs', 'deletions']);
+});
+
+it('applies incoming tombstones to local records', async () => {
+  const activity = await createActivity({ name: 'Gym', category: 'health', timesPerWeek: 3, importance: 'high' });
+  const log = await addLog(activity.id);
+  const data = await exportData();
+  const deletedAt = new Date(Date.parse(activity.updatedAt) + 1).toISOString();
+
+  await importData({
+    ...data,
+    activities: [],
+    logs: [],
+    deletions: [{ key: `activity:${activity.id}`, kind: 'activity', id: activity.id, deletedAt }],
+  }, 'merge');
+
+  expect(await listActivities()).toEqual([]);
+  expect(await listLogs()).toEqual([]);
+  expect((await exportData()).deletions).toEqual(expect.arrayContaining([
+    { key: `activity:${activity.id}`, kind: 'activity', id: activity.id, deletedAt },
+    { key: `log:${log.id}`, kind: 'log', id: log.id, deletedAt },
+  ]));
+  expect(log.activityId).toBe(activity.id);
+});
+
+it('converts and imports schema version 1 backups', async () => {
+  const data = await fixture();
+  const legacy = {
+    app: 'hubris' as const,
+    schemaVersion: 1 as const,
+    exportedAt: data.exportedAt,
+    activities: data.activities.map((activity) => {
+      const legacyActivity = { ...activity };
+      delete legacyActivity.versions;
+      return legacyActivity;
+    }),
+    logs: data.logs,
+  };
+
+  const parsed = parseBackup(JSON.stringify(legacy));
+  expect(parsed.success).toBe(true);
+  if (!parsed.success) return;
+  expect(parsed.data.schemaVersion).toBe(2);
+  expect(parsed.data.deletions).toEqual([]);
+  expect(parsed.data.activities[0].versions).toEqual([{
+    from: legacy.activities[0].createdAt,
+    category: legacy.activities[0].category,
+    timesPerWeek: legacy.activities[0].timesPerWeek,
+    importance: legacy.activities[0].importance,
+    archived: legacy.activities[0].archived,
+  }]);
+  await importData(parsed.data, 'replace');
+  expect(await listActivities()).toEqual(parsed.data.activities);
+});
+
+it.each(['empty versions', 'unsorted versions', 'last version mismatch', 'bad deletion key'])(
+  'rejects invalid schema version 2 history: %s',
+  async (kind) => {
+    const data = await fixture();
+    const first = data.activities[0];
+    const variants: Record<string, unknown> = {
+      'empty versions': { ...data, activities: [{ ...first, versions: [] }] },
+      'unsorted versions': {
+        ...data,
+        activities: [{
+          ...first,
+          versions: [
+            { ...first.versions?.[0], from: '2026-02-01T00:00:00.000Z' },
+            { ...first.versions?.[0], from: '2026-01-01T00:00:00.000Z' },
+          ],
+        }],
+      },
+      'last version mismatch': {
+        ...data,
+        activities: [{ ...first, versions: [{ ...first.versions?.[0], timesPerWeek: first.timesPerWeek + 1 }] }],
+      },
+      'bad deletion key': {
+        ...data,
+        deletions: [{ key: 'wrong', kind: 'log', id: 'x', deletedAt: data.exportedAt }],
+      },
+    };
+    expect(parseBackup(JSON.stringify(variants[kind])).success).toBe(false);
+  },
+);
 it('rejects non-JSON', () => {
   expect(parseBackup('{')).toEqual({ success: false, errors: ['This file is not valid JSON.'] });
 });
@@ -97,9 +248,10 @@ it('keeps a local edit after merging a backup from a device whose clock ran ahea
     const activity = await createActivity({ name: 'Leetcode', category: 'career', timesPerWeek: 5, importance: 'high' });
     const ahead = new Date(Date.now() + 10 * 60_000).toISOString();
     const backup: HubrisExport = {
-      app: 'hubris', schemaVersion: 1, exportedAt: ahead,
+      app: 'hubris', schemaVersion: 2, exportedAt: ahead,
       activities: [{ ...activity, name: 'Leetcode from the other device', updatedAt: ahead }],
       logs: [],
+      deletions: [],
     };
     await importData(backup, 'merge');
     expect((await listActivities())[0].updatedAt).toBe(ahead);

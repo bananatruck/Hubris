@@ -1,4 +1,4 @@
-import type { ActivityLog, TrackedActivity } from '@hubris/types';
+import type { ActivityLog, DeletionTombstone, TrackedActivity } from '@hubris/types';
 import { getDB } from './db';
 import { withTransaction } from './transaction';
 import { activityInputSchema, logSchema, validate, ValidationError } from './validation';
@@ -13,6 +13,10 @@ export type ActivityPatch = Partial<Omit<TrackedActivity, 'id' | 'createdAt' | '
  */
 function nextUpdatedAt(previous: string) {
   return new Date(Math.max(Date.now(), Date.parse(previous) + 1)).toISOString();
+}
+
+function tombstone(kind: DeletionTombstone['kind'], id: string, deletedAt: string): DeletionTombstone {
+  return { key: `${kind}:${id}`, kind, id, deletedAt };
 }
 
 export async function listActivities() {
@@ -74,11 +78,22 @@ export function setArchived(id: string, archived: boolean) {
 }
 export async function deleteActivity(id: string) {
   const db = await getDB();
-  const tx = db.transaction(['activities', 'logs'], 'readwrite');
+  const tx = db.transaction(['activities', 'logs', 'deletions'], 'readwrite');
   return withTransaction(tx, async () => {
-    const keys = await tx.objectStore('logs').index('activityId').getAllKeys(id);
-    await Promise.all(keys.map((key) => tx.objectStore('logs').delete(key)));
+    const activity = await tx.objectStore('activities').get(id);
+    const previousDeletion = await tx.objectStore('deletions').get(`activity:${id}`);
+    const deletedAt = new Date(Math.max(
+      Date.now(),
+      activity ? Date.parse(activity.updatedAt) + 1 : 0,
+      previousDeletion ? Date.parse(previousDeletion.deletedAt) : 0,
+    )).toISOString();
+    const logs = await tx.objectStore('logs').index('activityId').getAll(id);
+    await Promise.all(logs.flatMap((log) => [
+      tx.objectStore('logs').delete(log.id),
+      tx.objectStore('deletions').put(tombstone('log', log.id, deletedAt)),
+    ]));
     await tx.objectStore('activities').delete(id);
+    await tx.objectStore('deletions').put(tombstone('activity', id, deletedAt));
   });
 }
 export async function addLog(activityId: string, note?: string, at: Date = new Date()) {
@@ -92,14 +107,21 @@ export async function addLog(activityId: string, note?: string, at: Date = new D
 export async function restoreLog(log: ActivityLog) {
   const checked = validate(logSchema, log);
   const db = await getDB();
-  const tx = db.transaction(['activities', 'logs'], 'readwrite');
+  const tx = db.transaction(['activities', 'logs', 'deletions'], 'readwrite');
   return withTransaction(tx, async () => {
     if (!await tx.objectStore('activities').get(checked.activityId)) throw new ValidationError('Activity no longer exists.');
     await tx.objectStore('logs').put(checked);
+    await tx.objectStore('deletions').delete(`log:${checked.id}`);
   });
 }
 export async function deleteLog(id: string) {
-  await (await getDB()).delete('logs', id);
+  const db = await getDB();
+  const tx = db.transaction(['logs', 'deletions'], 'readwrite');
+  return withTransaction(tx, async () => {
+    const deletedAt = new Date().toISOString();
+    await tx.objectStore('logs').delete(id);
+    await tx.objectStore('deletions').put(tombstone('log', id, deletedAt));
+  });
 }
 export async function getMeta(key: string) {
   return (await getDB()).get('meta', key);
@@ -109,9 +131,14 @@ export async function setMeta(key: string, value: boolean) {
 }
 export async function eraseAll() {
   const db = await getDB();
-  const tx = db.transaction(['activities', 'logs', 'meta'], 'readwrite');
+  const tx = db.transaction(['activities', 'logs', 'meta', 'deletions'], 'readwrite');
   return withTransaction(tx, async () => {
-    await Promise.all([tx.objectStore('activities').clear(), tx.objectStore('logs').clear(), tx.objectStore('meta').clear()]);
+    await Promise.all([
+      tx.objectStore('activities').clear(),
+      tx.objectStore('logs').clear(),
+      tx.objectStore('meta').clear(),
+      tx.objectStore('deletions').clear(),
+    ]);
   });
 }
 

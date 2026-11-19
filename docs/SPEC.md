@@ -48,6 +48,7 @@ Each decision below is one named constant or function in `packages/core/src/weig
 10. Count logs from the week start through the earlier of the week end and the as-of cutoff, inclusive.
     The cutoff defaults to the reference date.
     Trends use their reference date as the cutoff for every week so past weeks stay complete.
+11. Deletions create timestamped tombstones so merging an older backup cannot restore deleted activities or logs.
 
 ## Worked examples (each one is a unit test in `packages/core`)
 
@@ -79,7 +80,8 @@ With Career and Hobbies from Example B and no Health activities, the overall sco
 `TrackedActivity` has `id`, `name`, `category: ScoredCategory`, `timesPerWeek` (integer from 1 to 99), `importance`, `archived` (boolean), `createdAt`, and `updatedAt` (ISO strings).
 Its optional `versions` history is sorted by effective `from` time, and its top-level scoring fields always equal the final version.
 `ActivityLog` has `id`, `activityId`, `loggedAt` (ISO string), and an optional `note`.
-`HubrisExport` is `{ app: 'hubris', schemaVersion: 1, exportedAt, activities, logs }`.
+`HubrisExport` is `{ app: 'hubris', schemaVersion: 2, exportedAt, activities, logs, deletions }`.
+Each deletion stores `key` as `${kind}:${id}` alongside `kind`, `id`, and the ISO `deletedAt` time.
 
 ## Modules
 
