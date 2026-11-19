@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { computeWeeklyReport, computeWeeklyTrend, generateLogHeatmap, generateWeeklySuggestions, getWeekBounds } from '@hubris/core';
+import {
+  computeWeeklyReport, computeWeeklyTrend, formatDateKey, generateLogHeatmap, generateWeeklySuggestions, getWeekBounds,
+} from '@hubris/core';
 import * as repository from '../storage/repository';
 import { downloadBackup, exportData, importData, parseBackup } from '../storage/backup';
 import { isDataChangedMessage, notifyDataChanged } from '../shared/messages';
 import { HubrisContext, type HubrisState } from './useHubris';
 
-type Snapshot = Awaited<ReturnType<typeof repository.readSnapshot>>;
+type RepositorySnapshot = Awaited<ReturnType<typeof repository.readSnapshot>>;
+type Snapshot = Omit<RepositorySnapshot, 'dataRevision'>;
 const emptySnapshot: Snapshot = { activities: [], logs: [], onboardingComplete: false };
 
 export function HubrisProvider({ children }: { children: ReactNode }) {
@@ -14,13 +17,15 @@ export function HubrisProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
   const generation = useRef({ version: 0 });
+  const revision = useRef<number | null>(null);
   const hasLoaded = useRef(false);
 
   const reload = useCallback(async () => {
     const request = ++generation.current.version;
     try {
-      const data = await repository.readSnapshot();
+      const { dataRevision, ...data } = await repository.readSnapshot();
       if (request !== generation.current.version) return;
+      revision.current = dataRevision;
       setSnapshot(data);
       hasLoaded.current = true;
       setNow(new Date());
@@ -41,7 +46,21 @@ export function HubrisProvider({ children }: { children: ReactNode }) {
     if (channel) channel.onmessage = (event: MessageEvent<unknown>) => {
       if (isDataChangedMessage(event.data)) void reload();
     };
-    const timer = setInterval(() => { void reload(); }, 60_000);
+    const timer = setInterval(() => {
+      void repository.readDataRevision().then((dataRevision) => {
+        if (cancelled) return;
+        if (revision.current !== dataRevision) {
+          void reload();
+          return;
+        }
+        const current = new Date();
+        setNow((previous) => formatDateKey(previous) === formatDateKey(current) ? previous : current);
+      }).catch((cause: unknown) => {
+        if (cancelled) return;
+        setError(cause instanceof Error ? cause.message : 'Could not read local data. Try again.');
+        setStatus(hasLoaded.current ? 'ready' : 'error');
+      });
+    }, 60_000);
     return () => {
       cancelled = true;
       requests.version++;

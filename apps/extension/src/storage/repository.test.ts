@@ -130,4 +130,25 @@ describe('repository', () => {
     expect(await repo.listLogs()).toEqual([]);
   });
 
+  it('increments the data revision once for every repository write transaction', async () => {
+    const start = await repo.readDataRevision();
+    const activity = await repo.createActivity(input);
+    expect(await repo.readDataRevision()).toBe(start + 1);
+    await repo.updateActivity(activity.id, { name: 'Practice' });
+    expect(await repo.readDataRevision()).toBe(start + 2);
+    const log = await repo.addLog(activity.id);
+    expect(await repo.readDataRevision()).toBe(start + 3);
+    await repo.deleteLog(log.id);
+    expect(await repo.readDataRevision()).toBe(start + 4);
+    await repo.restoreLog(log);
+    expect(await repo.readDataRevision()).toBe(start + 5);
+    await repo.setMeta('other', true);
+    expect(await repo.readDataRevision()).toBe(start + 6);
+    await repo.deleteActivity(activity.id);
+    expect(await repo.readDataRevision()).toBe(start + 7);
+    await repo.completeOnboarding(false);
+    expect(await repo.readDataRevision()).toBe(start + 8);
+    await repo.eraseAll();
+    expect(await repo.readDataRevision()).toBe(start + 9);
+  });
 });

@@ -3,6 +3,7 @@ import type { HubrisExport } from '@hubris/types';
 import { computeWeeklyReport } from '@hubris/core';
 import {
   createActivity, addLog, deleteActivity, deleteLog, eraseAll, listActivities, listLogs, getMeta, updateActivity,
+  readDataRevision,
 } from './repository';
 import { createBackupDownload, exportData, importData, parseBackup } from './backup';
 
@@ -20,7 +21,9 @@ it('round trips export, parse, replace and downloadable JSON', async () => {
   const parsed = parseBackup(JSON.stringify(data));
   expect(parsed).toEqual({ success: true, data });
   await createActivity({ name: 'Extra', category: 'career', timesPerWeek: 1, importance: 'low' });
+  const revision = await readDataRevision();
   expect(await importData(data, 'replace')).toEqual({ activities: 1, logs: 1 });
+  expect(await readDataRevision()).toBe(revision + 1);
   expect(await listActivities()).toEqual(data.activities);
   expect(await listLogs()).toEqual(data.logs);
   expect(await getMeta('onboardingComplete')).toBe(true);

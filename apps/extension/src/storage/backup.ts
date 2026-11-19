@@ -142,6 +142,7 @@ export async function importData(data: HubrisExport, mode: 'replace' | 'merge') 
   return withTransaction(tx, async () => {
     let activities = 0;
     let logs = 0;
+    const revision = await tx.objectStore('meta').get('dataRevision');
     if (mode === 'replace') {
       await Promise.all([
         tx.objectStore('activities').clear(),
@@ -203,6 +204,7 @@ export async function importData(data: HubrisExport, mode: 'replace' | 'merge') 
       }
     }
     await tx.objectStore('meta').put(true, 'onboardingComplete');
+    await tx.objectStore('meta').put((typeof revision === 'number' ? revision : 0) + 1, 'dataRevision');
     return { activities, logs };
   });
 }

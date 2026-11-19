@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { formatDateKey } from '@hubris/core';
 import { HubrisProvider } from './HubrisProvider';
 import { useHubris } from './useHubris';
 import { createActivity, eraseAll } from '../storage/repository';
@@ -13,6 +14,7 @@ function Consumer() {
     <p>Logs: {state.logs.length}</p>
     <p>Trend: {state.trend.length}</p>
     <p>Heatmap: {state.heatmap.length}</p>
+    <p>Today: {formatDateKey(state.now)}</p>
     <p>Error: {state.error ?? 'none'}</p>
     <button onClick={() => { const activity = state.activities[0]; if (activity) void state.actions.logActivity(activity.id); }}>Log</button>
     <button onClick={() => { const log = state.logs[0]; if (log) void state.actions.undoLog(log); }}>Undo</button>
@@ -88,6 +90,61 @@ it('computes weekly suggestions from the current activities, logs, and clock', a
   try {
     render(<HubrisProvider><Suggestions /></HubrisProvider>);
     expect(await screen.findByText('Leetcode needs 5 more this week, with 4 days left.')).toBeTruthy();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('does not reload the snapshot on an idle tick with an unchanged data revision', async () => {
+  vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+  vi.setSystemTime(new Date(2026, 10, 18, 12));
+  const readSnapshot = vi.spyOn(repository, 'readSnapshot');
+  try {
+    render(<HubrisProvider><Consumer /></HubrisProvider>);
+    await screen.findByText('Status: ready');
+    readSnapshot.mockClear();
+
+    await act(() => vi.advanceTimersByTimeAsync(60_000));
+
+    expect(readSnapshot).not.toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('reloads the snapshot on a tick when the data revision changed', async () => {
+  vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+  vi.setSystemTime(new Date(2026, 10, 18, 12));
+  const readSnapshot = vi.spyOn(repository, 'readSnapshot');
+  const readDataRevision = vi.spyOn(repository, 'readDataRevision');
+  try {
+    render(<HubrisProvider><Consumer /></HubrisProvider>);
+    await screen.findByText('Status: ready');
+    const revision = await repository.readDataRevision();
+    readSnapshot.mockClear();
+    readDataRevision.mockResolvedValue(revision + 1);
+
+    await act(() => vi.advanceTimersByTimeAsync(60_000));
+
+    expect(readSnapshot).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('advances now at local midnight without reloading the snapshot', async () => {
+  vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+  vi.setSystemTime(new Date(2026, 10, 18, 23, 59, 30));
+  const readSnapshot = vi.spyOn(repository, 'readSnapshot');
+  try {
+    render(<HubrisProvider><Consumer /></HubrisProvider>);
+    await screen.findByText('Today: 2026-11-18');
+    readSnapshot.mockClear();
+
+    await act(() => vi.advanceTimersByTimeAsync(60_000));
+
+    expect(screen.getByText('Today: 2026-11-19')).toBeTruthy();
+    expect(readSnapshot).not.toHaveBeenCalled();
   } finally {
     vi.useRealTimers();
   }

@@ -1,6 +1,6 @@
 import type { ActivityLog, DeletionTombstone, TrackedActivity } from '@hubris/types';
 import { getDB } from './db';
-import { withTransaction } from './transaction';
+import { incrementDataRevision, withTransaction } from './transaction';
 import { activityInputSchema, logSchema, validate, ValidationError } from './validation';
 
 export { ValidationError } from './validation';
@@ -36,14 +36,18 @@ export async function createActivity(input: CreateActivityInput) {
     versions: [{ from: now, category: fields.category, timesPerWeek: fields.timesPerWeek, importance: fields.importance, archived: fields.archived }],
   };
   const db = await getDB();
-  await db.add('activities', activity);
+  const tx = db.transaction(['activities', 'meta'], 'readwrite');
+  await withTransaction(tx, async () => {
+    await tx.objectStore('activities').add(activity);
+    await incrementDataRevision(tx.objectStore('meta'));
+  });
   return activity;
 }
 export async function updateActivity(id: string, patch: ActivityPatch) {
   const db = await getDB();
-  const tx = db.transaction('activities', 'readwrite');
+  const tx = db.transaction(['activities', 'meta'], 'readwrite');
   return withTransaction(tx, async () => {
-    const current = await tx.store.get(id);
+    const current = await tx.objectStore('activities').get(id);
     if (!current) throw new ValidationError('Activity no longer exists.');
     const { name, category, timesPerWeek, importance, archived } = current;
     const fields = validate(activityInputSchema, { name, category, timesPerWeek, importance, archived, ...patch });
@@ -69,7 +73,8 @@ export async function updateActivity(id: string, patch: ActivityPatch) {
       versions.push(version);
     }
     const updated = { ...current, ...fields, versions, updatedAt };
-    await tx.store.put(updated);
+    await tx.objectStore('activities').put(updated);
+    await incrementDataRevision(tx.objectStore('meta'));
     return updated;
   });
 }
@@ -78,7 +83,7 @@ export function setArchived(id: string, archived: boolean) {
 }
 export async function deleteActivity(id: string) {
   const db = await getDB();
-  const tx = db.transaction(['activities', 'logs', 'deletions'], 'readwrite');
+  const tx = db.transaction(['activities', 'logs', 'deletions', 'meta'], 'readwrite');
   return withTransaction(tx, async () => {
     const activity = await tx.objectStore('activities').get(id);
     const previousDeletion = await tx.objectStore('deletions').get(`activity:${id}`);
@@ -94,6 +99,7 @@ export async function deleteActivity(id: string) {
     ]));
     await tx.objectStore('activities').delete(id);
     await tx.objectStore('deletions').put(tombstone('activity', id, deletedAt));
+    await incrementDataRevision(tx.objectStore('meta'));
   });
 }
 export async function addLog(activityId: string, note?: string, at: Date = new Date()) {
@@ -107,38 +113,51 @@ export async function addLog(activityId: string, note?: string, at: Date = new D
 export async function restoreLog(log: ActivityLog) {
   const checked = validate(logSchema, log);
   const db = await getDB();
-  const tx = db.transaction(['activities', 'logs', 'deletions'], 'readwrite');
+  const tx = db.transaction(['activities', 'logs', 'deletions', 'meta'], 'readwrite');
   return withTransaction(tx, async () => {
     if (!await tx.objectStore('activities').get(checked.activityId)) throw new ValidationError('Activity no longer exists.');
     await tx.objectStore('logs').put(checked);
     await tx.objectStore('deletions').delete(`log:${checked.id}`);
+    await incrementDataRevision(tx.objectStore('meta'));
   });
 }
 export async function deleteLog(id: string) {
   const db = await getDB();
-  const tx = db.transaction(['logs', 'deletions'], 'readwrite');
+  const tx = db.transaction(['logs', 'deletions', 'meta'], 'readwrite');
   return withTransaction(tx, async () => {
     const deletedAt = new Date().toISOString();
     await tx.objectStore('logs').delete(id);
     await tx.objectStore('deletions').put(tombstone('log', id, deletedAt));
+    await incrementDataRevision(tx.objectStore('meta'));
   });
 }
 export async function getMeta(key: string) {
   return (await getDB()).get('meta', key);
 }
 export async function setMeta(key: string, value: boolean) {
-  await (await getDB()).put('meta', value, key);
+  const db = await getDB();
+  const tx = db.transaction('meta', 'readwrite');
+  await withTransaction(tx, async () => {
+    await tx.store.put(value, key);
+    await incrementDataRevision(tx.store);
+  });
+}
+export async function readDataRevision() {
+  const value = await (await getDB()).get('meta', 'dataRevision');
+  return typeof value === 'number' ? value : 0;
 }
 export async function eraseAll() {
   const db = await getDB();
   const tx = db.transaction(['activities', 'logs', 'meta', 'deletions'], 'readwrite');
   return withTransaction(tx, async () => {
+    const revision = await tx.objectStore('meta').get('dataRevision');
     await Promise.all([
       tx.objectStore('activities').clear(),
       tx.objectStore('logs').clear(),
       tx.objectStore('meta').clear(),
       tx.objectStore('deletions').clear(),
     ]);
+    await tx.objectStore('meta').put((typeof revision === 'number' ? revision : 0) + 1, 'dataRevision');
   });
 }
 
@@ -146,10 +165,18 @@ export async function readSnapshot() {
   const db = await getDB();
   const tx = db.transaction(['activities', 'logs', 'meta']);
   return withTransaction(tx, async () => {
-    const [activities, logs, onboardingComplete] = await Promise.all([
-      tx.objectStore('activities').getAll(), tx.objectStore('logs').getAll(), tx.objectStore('meta').get('onboardingComplete'),
+    const [activities, logs, onboardingComplete, dataRevision] = await Promise.all([
+      tx.objectStore('activities').getAll(),
+      tx.objectStore('logs').getAll(),
+      tx.objectStore('meta').get('onboardingComplete'),
+      tx.objectStore('meta').get('dataRevision'),
     ]);
-    return { activities, logs, onboardingComplete: onboardingComplete === true };
+    return {
+      activities,
+      logs,
+      onboardingComplete: onboardingComplete === true,
+      dataRevision: typeof dataRevision === 'number' ? dataRevision : 0,
+    };
   });
 }
 
@@ -178,5 +205,6 @@ export async function completeOnboarding(withExamples: boolean) {
       }
     }
     await tx.objectStore('meta').put(true, 'onboardingComplete');
+    await incrementDataRevision(tx.objectStore('meta'));
   });
 }
