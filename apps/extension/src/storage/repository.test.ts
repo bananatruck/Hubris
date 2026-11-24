@@ -1,10 +1,53 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as repo from './repository';
+import { getDB } from './db';
+import { computeWeeklyReport } from '@hubris/core';
 
 export const input = { name: '  Leetcode  ', category: 'career', timesPerWeek: 5, importance: 'high' } satisfies repo.CreateActivityInput;
 beforeEach(async () => { await repo.eraseAll(); });
 
 describe('repository', () => {
+  it('creates activity history and retains each settings edit', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date(2026, 10, 16, 9));
+      const created = await repo.createActivity(input);
+      expect(created.versions).toEqual([{
+        from: created.createdAt, category: 'career', timesPerWeek: 5, importance: 'high', archived: false,
+      }]);
+
+      vi.setSystemTime(new Date(2026, 10, 17, 9));
+      const renamed = await repo.updateActivity(created.id, { name: 'Practice' });
+      expect(renamed.versions).toEqual(created.versions);
+      const revised = await repo.updateActivity(created.id, { timesPerWeek: 4 });
+      expect(revised.versions).toHaveLength(2);
+      expect(revised.versions?.[1]).toMatchObject({ from: new Date().toISOString(), timesPerWeek: 4 });
+
+      vi.setSystemTime(new Date(2026, 10, 23, 9));
+      const archived = await repo.setArchived(created.id, true);
+      expect(archived.versions).toHaveLength(3);
+      expect(archived.versions?.[2]).toMatchObject({ from: archived.updatedAt, timesPerWeek: 4, archived: true });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('preserves settings for as-of reports earlier in the edited week', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date(2026, 10, 16, 9));
+      const activity = await repo.createActivity(input);
+      const asOf = new Date(2026, 10, 17, 9);
+      vi.setSystemTime(new Date(2026, 10, 18, 9));
+      const edited = await repo.updateActivity(activity.id, { timesPerWeek: 2 });
+
+      expect(computeWeeklyReport([edited], [], asOf).categories.career.activities[0]?.goal).toBe(5);
+      expect(computeWeeklyReport([edited], [], new Date()).categories.career.activities[0]?.goal).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('creates, trims, updates, archives, restores, and deletes activities', async () => {
     const created = await repo.createActivity(input);
     expect(created.name).toBe('Leetcode');
@@ -32,6 +75,33 @@ describe('repository', () => {
     expect(await repo.listLogs()).toHaveLength(2);
     await repo.deleteActivity(first.id);
     expect(await repo.listLogs()).toEqual([retained]);
+  });
+
+  it('undoes a log through one transaction and writes its tombstone', async () => {
+    const activity = await repo.createActivity(input);
+    const undo = await repo.addUndoableLog(activity.id);
+    const { log } = undo;
+
+    await repo.undoLog(undo);
+
+    expect(await repo.listLogs()).toEqual([]);
+    expect(await (await getDB()).get('deletions', `log:${log.id}`)).toMatchObject({ id: log.id, kind: 'log' });
+  });
+
+  it('records deletion tombstones, removes restored log tombstones, and erases tombstones', async () => {
+    const activity = await repo.createActivity(input);
+    const log = await repo.addLog(activity.id);
+    await repo.deleteLog(log.id);
+    const db = await getDB();
+    expect(await db.get('deletions', `log:${log.id}`)).toMatchObject({ kind: 'log', id: log.id });
+    await repo.restoreLog(log);
+    expect(await db.get('deletions', `log:${log.id}`)).toBeUndefined();
+
+    await repo.deleteActivity(activity.id);
+    expect(await db.get('deletions', `activity:${activity.id}`)).toMatchObject({ kind: 'activity', id: activity.id });
+    expect(await db.get('deletions', `log:${log.id}`)).toMatchObject({ kind: 'log', id: log.id });
+    await repo.eraseAll();
+    expect(await db.getAll('deletions')).toEqual([]);
   });
 
   it.each([
@@ -69,5 +139,27 @@ describe('repository', () => {
     expect(await repo.getMeta('other')).toBeUndefined();
     expect(await repo.listActivities()).toEqual([]);
     expect(await repo.listLogs()).toEqual([]);
+  });
+
+  it('increments the data revision once for every repository write transaction', async () => {
+    const start = await repo.readDataRevision();
+    const activity = await repo.createActivity(input);
+    expect(await repo.readDataRevision()).toBe(start + 1);
+    await repo.updateActivity(activity.id, { name: 'Practice' });
+    expect(await repo.readDataRevision()).toBe(start + 2);
+    const log = await repo.addLog(activity.id);
+    expect(await repo.readDataRevision()).toBe(start + 3);
+    await repo.deleteLog(log.id);
+    expect(await repo.readDataRevision()).toBe(start + 4);
+    await repo.restoreLog(log);
+    expect(await repo.readDataRevision()).toBe(start + 5);
+    await repo.setMeta('other', true);
+    expect(await repo.readDataRevision()).toBe(start + 6);
+    await repo.deleteActivity(activity.id);
+    expect(await repo.readDataRevision()).toBe(start + 7);
+    await repo.completeOnboarding(false);
+    expect(await repo.readDataRevision()).toBe(start + 8);
+    await repo.eraseAll();
+    expect(await repo.readDataRevision()).toBe(start + 9);
   });
 });

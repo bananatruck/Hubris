@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AlertCircle, BarChart3, CalendarCheck2, Clock, PanelRightOpen, RotateCcw, Settings } from 'lucide-react';
-import type { ActivityLog } from '@hubris/types';
+import type { LogUndo } from '../storage/repository';
 import { useHubris } from '../state/useHubris';
 import { NotificationContext, type Notification } from './lib/notify';
 import { errorMessage } from './lib/errors';
@@ -51,7 +51,7 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
   const { status, error, report, onboardingComplete, actions } = useHubris();
   const [activeTab, setActiveTab] = useState<TabValue>('today');
   const [keepOnboardingForStep3, setKeepOnboardingForStep3] = useState(false);
-  const [toast, setToast] = useState<ToastData | null>(null);
+  const [toasts, setToasts] = useState<ToastData[]>([]);
   const [windowId, setWindowId] = useState<number | null>(null);
 
   const canShowSidePanelButton =
@@ -77,9 +77,13 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
     };
   }, [canShowSidePanelButton]);
 
-  const notify = useCallback((notification: Notification) => {
-    setToast({ ...notification, id: crypto.randomUUID() });
+  const addToast = useCallback((toast: ToastData) => {
+    setToasts((current) => [...current, toast]);
   }, []);
+
+  const notify = useCallback((notification: Notification) => {
+    addToast({ ...notification, id: crypto.randomUUID() });
+  }, [addToast]);
 
   const handleOpenSidePanel = () => {
     if (typeof chrome !== 'undefined' && chrome.sidePanel?.open && windowId !== null) {
@@ -94,27 +98,28 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
   };
 
   const handleLogged = useCallback(
-    (activityName: string, log: ActivityLog) => {
-      const toastId = crypto.randomUUID();
-      setToast({
-        id: toastId,
+    (activityName: string, undo: LogUndo) => {
+      addToast({
+        id: undo.log.id,
         tone: 'info',
         message: `${activityName} logged`,
+        undoLabel: `Undo ${activityName}`,
         onUndo: () => {
-          void actions.undoLog(log).catch(() => {
-            const message = 'Could not undo. The log is still there.';
-            setToast((current) => current && current.id !== toastId
-              ? { ...current, errorMessage: message }
-              : { id: crypto.randomUUID(), message, tone: 'error' });
+          void actions.undoLog(undo).catch(() => {
+            addToast({
+              id: crypto.randomUUID(),
+              message: 'Could not undo. The log is still there.',
+              tone: 'error',
+            });
           });
         },
       });
     },
-    [actions],
+    [actions, addToast],
   );
 
-  const dismissToast = useCallback(() => {
-    setToast(null);
+  const dismissToast = useCallback((id: string) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id));
   }, []);
 
   const weekRangeText = formatWeekRange(report.weekStart, report.weekEnd);
@@ -259,7 +264,7 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
             </nav>
           </TabsRoot>
         )}
-        <Toast toast={toast} onDismiss={dismissToast} durationMs={6000} />
+        <Toast toasts={toasts} onDismiss={dismissToast} durationMs={6000} />
       </div>
     </NotificationContext.Provider>
   );

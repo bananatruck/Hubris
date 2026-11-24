@@ -1,7 +1,7 @@
 // Acceptance tests for weekly suggestions (round 2), written by the lead before the implementation.
 // They carry the rules of the existing engine in src/suggestions.ts over to the weekly model:
 // at-risk = still short of the goal and more sessions remain than days left in the week
-// (ceil of the fractional days to Sunday 23:59:59.999, as in isAtRisk), worst score first, at most two,
+// (local calendar days through Sunday, today included, as in isAtRisk), worst score first, at most two,
 // priority 10 - floor(score / 10); streak protector for daily goals (7 a week) not yet logged today,
 // priority 8; light day when nothing at all was logged today, for the lowest-scoring activity under 50
 // that is not already suggested, priority 5; at most three suggestions, highest priority first.
@@ -11,8 +11,8 @@ import type { ActivityLog, Importance, ScoredCategory, TrackedActivity } from '@
 import { generateWeeklySuggestions } from '../src/weekly-suggestions';
 import { isAtRisk } from '../src/suggestions';
 
-// Thursday 2026-11-19 15:00 local. The week ends Sunday 2026-11-22 23:59:59.999,
-// 3 days 8 h 59 min away, so 4 whole or partial days are left.
+// Thursday 2026-11-19 15:00 local. The week ends Sunday 2026-11-22,
+// so Thursday through Sunday leaves 4 days.
 const THURSDAY = new Date(2026, 10, 19, 15, 0, 0);
 
 function activity(

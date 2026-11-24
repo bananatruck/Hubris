@@ -73,17 +73,16 @@ describe('Hubris UI', () => {
     expect(screen.getByRole('img', { name: /Overall weekly score 0,/ })).toBeTruthy();
     fireEvent.click(logButton);
 
-    await screen.findByText('Leetcode logged');
+    const undoButton = await screen.findByRole('button', { name: 'Undo Leetcode' });
     await screen.findByRole('img', { name: /Overall weekly score 4,/ });
     await screen.findByRole('button', {
       name: 'Log Leetcode, 1 of 5 this week',
     });
 
-    const undoButton = screen.getByRole('button', { name: 'Undo' });
     fireEvent.click(undoButton);
 
     await waitFor(() => {
-      expect(screen.queryByText('Leetcode logged')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Undo Leetcode' })).toBeNull();
     });
     await screen.findByRole('button', {
       name: 'Log Leetcode, 0 of 5 this week',
@@ -184,8 +183,7 @@ describe('Hubris UI', () => {
     fireEvent.click(logButton);
     fireEvent.click(logButton);
 
-    await screen.findByText('Meditation logged');
-    expect(screen.getByRole('button', { name: 'Undo' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Undo Meditation' })).toBeTruthy();
     await waitFor(async () => {
       expect(await listLogs()).toHaveLength(4);
     });

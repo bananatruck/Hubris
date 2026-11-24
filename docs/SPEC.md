@@ -44,10 +44,13 @@ Each decision below is one named constant or function in `packages/core/src/weig
 6. One log entry counts as one time done.
 7. Archived activities are left out of the score; their logs are kept.
 8. Scores keep full precision in `packages/core`; the UI rounds to whole numbers only for display.
-9. An activity counts from the week it was created; goal, importance and category edits apply to every week because the app keeps no revision history.
+9. Each week uses the activity settings in effect at the end of that week, or now for the current week; edits made during a week apply to that whole week.
 10. Count logs from the week start through the earlier of the week end and the as-of cutoff, inclusive.
     The cutoff defaults to the reference date.
     Trends use their reference date as the cutoff for every week so past weeks stay complete.
+11. Deletions create timestamped tombstones so merging an older backup cannot restore deleted activities or logs.
+12. A monotonic local data revision avoids rescoring on idle minute ticks; a future-dated log is counted at the next local day change or data change.
+13. Immediate Undo is unavailable when a later import may have changed the logged item; History deletion remains available.
 
 ## Worked examples (each one is a unit test in `packages/core`)
 
@@ -77,8 +80,10 @@ With Career and Hobbies from Example B and no Health activities, the overall sco
 `Importance` is `'high' | 'medium' | 'low'`.
 `ScoredCategory` is `'career' | 'health' | 'hobbies-habits'`, matching the category ids already used by `packages/types` and the mobile app.
 `TrackedActivity` has `id`, `name`, `category: ScoredCategory`, `timesPerWeek` (integer from 1 to 99), `importance`, `archived` (boolean), `createdAt`, and `updatedAt` (ISO strings).
+Its optional `versions` history is sorted by effective `from` time, and its top-level scoring fields always equal the final version.
 `ActivityLog` has `id`, `activityId`, `loggedAt` (ISO string), and an optional `note`.
-`HubrisExport` is `{ app: 'hubris', schemaVersion: 1, exportedAt, activities, logs }`.
+`HubrisExport` is `{ app: 'hubris', schemaVersion: 2, exportedAt, activities, logs, deletions }`.
+Each deletion stores `key` as `${kind}:${id}` alongside `kind`, `id`, and the ISO `deletedAt` time.
 
 ## Modules
 

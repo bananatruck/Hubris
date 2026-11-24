@@ -1,5 +1,6 @@
 import type {
     ActivityLog,
+    ActivityVersion,
     CategoryReport,
     Importance,
     ScoredCategory,
@@ -96,6 +97,24 @@ export function getWeekBounds(referenceDate: Date = new Date()): { start: Date; 
 
 const IMPORTANCE_ORDER: Readonly<Record<Importance, number>> = { high: 0, medium: 1, low: 2 };
 
+export function activityVersionAt(activity: TrackedActivity, moment: Date): ActivityVersion | null {
+    const versions = activity.versions?.length
+        ? activity.versions
+        : [{
+            from: activity.createdAt,
+            category: activity.category,
+            timesPerWeek: activity.timesPerWeek,
+            importance: activity.importance,
+            archived: activity.archived,
+        }];
+    let selected: ActivityVersion | null = null;
+    for (const version of versions) {
+        if (new Date(version.from) > moment) break;
+        selected = version;
+    }
+    return selected;
+}
+
 /** Stable display order: High first, then Medium, then Low, then by name (case-insensitive). */
 function compareRows(a: { importance: Importance; name: string }, b: { importance: Importance; name: string }): number {
     return IMPORTANCE_ORDER[a.importance] - IMPORTANCE_ORDER[b.importance]
@@ -109,6 +128,7 @@ export function computeWeeklyReport(
     asOf: Date = referenceDate,
 ): WeeklyReport {
     const { start, end } = getWeekBounds(referenceDate);
+    const settingsAt = new Date(Math.min(end.getTime(), asOf.getTime()));
     const counts = new Map<string, number>();
     for (const log of logs) {
         const date = new Date(log.loggedAt);
@@ -118,18 +138,18 @@ export function computeWeeklyReport(
     }
     function reportFor(category: ScoredCategory): CategoryReport {
         const rows = activities
-            .filter((activity) => !activity.archived
-                && activity.category === category
-                && new Date(activity.createdAt) <= end)
-            .map((activity) => {
+            .map((activity) => ({ activity, version: activityVersionAt(activity, settingsAt) }))
+            .filter((entry): entry is { activity: TrackedActivity; version: ActivityVersion } =>
+                entry.version !== null && !entry.version.archived && entry.version.category === category)
+            .map(({ activity, version }) => {
                 const done = counts.get(activity.id) ?? 0;
                 return {
                     activityId: activity.id,
                     name: activity.name,
-                    importance: activity.importance,
-                    goal: activity.timesPerWeek,
+                    importance: version.importance,
+                    goal: version.timesPerWeek,
                     done,
-                    score: activityScore(done, activity.timesPerWeek),
+                    score: activityScore(done, version.timesPerWeek),
                 };
             })
             .sort(compareRows);

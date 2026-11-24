@@ -15,11 +15,20 @@ export const activityInputSchema = z.object({
   archived: z.boolean().default(false),
 }).strict();
 
+export const activityVersionSchema = z.object({
+  from: z.iso.datetime({ offset: true }),
+  category: z.enum(['career', 'health', 'hobbies-habits']),
+  timesPerWeek: z.number().int().min(1).max(99),
+  importance: z.enum(['high', 'medium', 'low']),
+  archived: z.boolean(),
+}).strict();
+
 export const activitySchema = activityInputSchema.extend({
   archived: z.boolean(),
   id: z.string().min(1),
   createdAt: z.iso.datetime({ offset: true }),
   updatedAt: z.iso.datetime({ offset: true }),
+  versions: z.array(activityVersionSchema).min(1).optional(),
 }).strict();
 
 export const logSchema = z.object({

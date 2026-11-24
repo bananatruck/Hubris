@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react';
 import type { ActivityLog, DayHeatmapCell, Suggestion, TrackedActivity, WeeklyReport, WeeklyTrendPoint } from '@hubris/types';
-import type { ActivityPatch, CreateActivityInput } from '../storage/repository';
+import type { ActivityPatch, CreateActivityInput, LogUndo } from '../storage/repository';
 
 export interface HubrisState {
   status: 'loading' | 'ready' | 'error';
@@ -18,8 +18,8 @@ export interface HubrisState {
     updateActivity(id: string, patch: ActivityPatch): Promise<TrackedActivity>;
     setArchived(id: string, archived: boolean): Promise<TrackedActivity>;
     deleteActivity(id: string): Promise<void>;
-    logActivity(id: string, note?: string): Promise<ActivityLog>;
-    undoLog(log: ActivityLog): Promise<void>;
+    logActivity(id: string, note?: string): Promise<LogUndo>;
+    undoLog(undo: LogUndo): Promise<void>;
     deleteLog(id: string): Promise<void>;
     exportBackup(): Promise<void>;
     importBackup(file: File, mode: 'replace' | 'merge'): Promise<{ activities: number; logs: number }>;

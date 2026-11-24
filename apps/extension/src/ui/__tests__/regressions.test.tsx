@@ -17,7 +17,7 @@ function makeState(overrides: Partial<HubrisState> = {}, actionOverrides: Partia
   const actions: HubrisState['actions'] = {
     createActivity: vi.fn(async () => activity), updateActivity: vi.fn(async () => activity),
     setArchived: vi.fn(async () => activity), deleteActivity: vi.fn(async () => {}),
-    logActivity: vi.fn(async () => log), undoLog: vi.fn(async () => {}), deleteLog: vi.fn(async () => {}),
+    logActivity: vi.fn(async () => ({ log, importGeneration: 0 })), undoLog: vi.fn(async () => {}), deleteLog: vi.fn(async () => {}),
     exportBackup: vi.fn(async () => {}), importBackup: vi.fn(async () => ({ activities: 1, logs: 1 })),
     eraseAll: vi.fn(async () => {}), completeOnboarding: vi.fn(async () => {}), retry: vi.fn(async () => {}),
     ...actionOverrides,
@@ -39,7 +39,7 @@ function setup(
   return actions;
 }
 const failure = () => Promise.reject(new ValidationError('Storage is full.'));
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 it('announces the score outside the image semantics', () => {
   setup();
@@ -63,7 +63,7 @@ it('disables only the pending log row and reports a rejected write', async () =>
   rejectWrite(new ValidationError('Storage is full.'));
   expect(await screen.findByRole('status')).toHaveTextContent('Storage is full.');
   await waitFor(() => expect(button).toBeEnabled());
-  expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+  expect(screen.queryByRole('button', { name: /^Undo/ })).toBeNull();
 });
 
 it('keeps the pending Today screen mounted across the side-panel breakpoint', () => {
@@ -93,9 +93,9 @@ it.each(['archive', 'restore', 'export'] as const)('reports %s failures', async 
 it('reports undo failure without offering another undo', async () => {
   setup({}, { undoLog: failure });
   fireEvent.click(screen.getByRole('button', { name: /Log Practice/ }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Undo' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Undo Practice' }));
   await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Could not undo. The log is still there.'));
-  expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+  expect(screen.queryByRole('button', { name: /^Undo/ })).toBeNull();
 });
 
 it('keeps a newer log Undo available when an older Undo fails', async () => {
@@ -104,11 +104,11 @@ it('keeps a newer log Undo available when an older Undo fails', async () => {
     rejectUndo = reject;
   }));
   const reading = { ...activity, id: 'b', name: 'Reading' };
-  const practiceLog = { ...log, id: 'practice-log' };
-  const readingLog = { ...log, id: 'reading-log', activityId: reading.id };
+  const practiceUndo = { log: { ...log, id: 'practice-log' }, importGeneration: 0 };
+  const readingUndo = { log: { ...log, id: 'reading-log', activityId: reading.id }, importGeneration: 0 };
   const logActivity = vi.fn<HubrisState['actions']['logActivity']>()
-    .mockResolvedValueOnce(practiceLog)
-    .mockResolvedValueOnce(readingLog);
+    .mockResolvedValueOnce(practiceUndo)
+    .mockResolvedValueOnce(readingUndo);
   setup(
     {
       activities: [activity, reading],
@@ -118,15 +118,101 @@ it('keeps a newer log Undo available when an older Undo fails', async () => {
   );
 
   fireEvent.click(screen.getByRole('button', { name: /Log Practice/ }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Undo' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Undo Practice' }));
   fireEvent.click(screen.getByRole('button', { name: /Log Reading/ }));
-  await screen.findByText('Reading logged');
+  await screen.findByRole('button', { name: 'Undo Reading' });
 
   rejectUndo(new ValidationError('Storage is full.'));
 
-  expect(await screen.findByText('Could not undo. The log is still there.')).toBeTruthy();
-  expect(screen.getByText('Reading logged')).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Undo' })).toBeTruthy();
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Could not undo. The log is still there.'));
+  expect(screen.getByRole('button', { name: 'Undo Reading' })).toBeTruthy();
+});
+
+it('keeps each recent log independently undoable', async () => {
+  vi.useFakeTimers();
+  const reading = { ...activity, id: 'b', name: 'Reading' };
+  const practiceUndo = { log: { ...log, id: 'practice-log' }, importGeneration: 0 };
+  const readingUndo = { log: { ...log, id: 'reading-log', activityId: reading.id }, importGeneration: 0 };
+  const logActivity = vi.fn<HubrisState['actions']['logActivity']>()
+    .mockResolvedValueOnce(practiceUndo)
+    .mockResolvedValueOnce(readingUndo);
+  const actions = setup(
+    {
+      activities: [activity, reading],
+      report: computeWeeklyReport([activity, reading], [log], now),
+    },
+    { logActivity },
+  );
+
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: /Log Practice/ }));
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: /Log Reading/ }));
+  });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Undo Reading' }));
+  expect(actions.undoLog).toHaveBeenCalledWith(readingUndo);
+  expect(screen.getByRole('button', { name: 'Undo Practice' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Undo Practice' }));
+  expect(actions.undoLog).toHaveBeenCalledWith(practiceUndo);
+});
+
+it('expires each recent log on its own timer', async () => {
+  vi.useFakeTimers();
+  const reading = { ...activity, id: 'b', name: 'Reading' };
+  const logActivity = vi.fn<HubrisState['actions']['logActivity']>()
+    .mockResolvedValueOnce({ log: { ...log, id: 'practice-log' }, importGeneration: 0 })
+    .mockResolvedValueOnce({ log: { ...log, id: 'reading-log', activityId: reading.id }, importGeneration: 0 });
+  setup(
+    {
+      activities: [activity, reading],
+      report: computeWeeklyReport([activity, reading], [log], now),
+    },
+    { logActivity },
+  );
+
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: /Log Practice/ }));
+  });
+  act(() => vi.advanceTimersByTime(2000));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: /Log Reading/ }));
+  });
+  act(() => vi.advanceTimersByTime(4000));
+
+  expect(screen.queryByRole('button', { name: 'Undo Practice' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Undo Reading' })).toBeTruthy();
+});
+
+it('keeps every recent log undoable when more than three logs are added', async () => {
+  vi.useFakeTimers();
+  const activities = ['Alpha', 'Beta', 'Gamma', 'Delta'].map((name, index) => ({
+    ...activity,
+    id: String(index),
+    name,
+  }));
+  const logActivity = vi.fn<HubrisState['actions']['logActivity']>();
+  activities.forEach((item, index) => {
+    logActivity.mockResolvedValueOnce({ log: { ...log, id: `log-${index}`, activityId: item.id }, importGeneration: 0 });
+  });
+  setup(
+    {
+      activities,
+      report: computeWeeklyReport(activities, [], now),
+    },
+    { logActivity },
+  );
+
+  for (const item of activities) {
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: new RegExp(`Log ${item.name}`) }));
+    });
+  }
+
+  for (const name of ['Alpha', 'Beta', 'Gamma', 'Delta']) {
+    expect(screen.getByRole('button', { name: `Undo ${name}` })).toBeTruthy();
+  }
 });
 
 it.each(['activity', 'log', 'erase'] as const)('keeps the %s dialog open while pending and on failure, then closes on success', async (kind) => {
@@ -348,10 +434,10 @@ it.each(['Start blank', 'Start with an example'])('locks earlier onboarding step
   expect(actions.completeOnboarding).toHaveBeenCalledTimes(1);
 });
 
-it('explains that Merge restores deleted items only in Merge import confirmation', () => {
+it('explains that Merge keeps deletions from either side only in Merge import confirmation', () => {
   setup();
   fireEvent.click(screen.getByRole('tab', { name: 'Settings' }));
-  const copy = 'Merge adds everything in the file that is missing here, including items you deleted after this backup was made.';
+  const copy = 'Merge adds what is missing here and keeps deletions made on either side.';
   fireEvent.click(screen.getByRole('radio', { name: 'Merge' }));
   expect(screen.queryByText(copy)).toBeNull();
   fireEvent.change(screen.getByLabelText('Import backup file'), { target: { files: [new File(['{}'], 'backup.json')] } });

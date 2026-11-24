@@ -1,6 +1,6 @@
 import type { ActivityLog, Importance, ScoredCategory, Suggestion, TrackedActivity } from '@hubris/types';
 import { formatDateKey } from './heatmap';
-import { isBehindPace } from './suggestions';
+import { calendarDaysLeft, isBehindPace } from './suggestions';
 import { computeWeeklyReport, SCORED_CATEGORIES } from './weighted-score';
 
 const IMPORTANCE_RANK: Readonly<Record<Importance, number>> = { high: 0, medium: 1, low: 2 };
@@ -17,7 +17,7 @@ export function generateWeeklySuggestions(
 ): Suggestion[] {
     const report = computeWeeklyReport(activities, logs, now);
     const rows = new Map(SCORED_CATEGORIES.flatMap((category) =>
-        report.categories[category].activities.map((row) => [row.activityId, row] as const)));
+        report.categories[category].activities.map((row) => [row.activityId, { ...row, category }] as const)));
     const scores = activities
         .filter((activity) => rows.has(activity.id) && new Date(activity.createdAt) <= now)
         .flatMap((activity) => {
@@ -26,7 +26,7 @@ export function generateWeeklySuggestions(
         })
         // Storage order is random (UUID keys): break score ties by importance, then name, like report rows.
         .sort((a, b) => a.score - b.score
-            || IMPORTANCE_RANK[a.activity.importance] - IMPORTANCE_RANK[b.activity.importance]
+            || IMPORTANCE_RANK[a.importance] - IMPORTANCE_RANK[b.importance]
             || a.activity.name.localeCompare(b.activity.name, undefined, { sensitivity: 'base' }));
     const today = formatDateKey(now);
     const loggedToday = new Set(logs.filter((log) => {
@@ -34,7 +34,7 @@ export function generateWeeklySuggestions(
         return date <= now && formatDateKey(date) === today;
     }).map((log) => log.activityId));
     const end = new Date(report.weekEnd);
-    const daysLeft = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    const daysLeft = calendarDaysLeft(end, now);
     const suggestions: Suggestion[] = [];
     function add(type: Suggestion['type'], activity: TrackedActivity, message: string, priority: number): void {
         suggestions.push({
@@ -50,7 +50,7 @@ export function generateWeeklySuggestions(
             10 - Math.floor(score / 10));
     }
     const alreadySuggested = (id: string): boolean => suggestions.some((suggestion) => suggestion.activityId === id);
-    const streak = scores.find(({ activity, remaining }) => activity.timesPerWeek === 7
+    const streak = scores.find(({ activity, goal, remaining }) => goal === 7
         && remaining > 0 && !loggedToday.has(activity.id) && !alreadySuggested(activity.id));
     if (streak) {
         add('streak-protector', streak.activity,
@@ -60,10 +60,10 @@ export function generateWeeklySuggestions(
         const light = scores.find(({ activity, score }) => score < 50 && !alreadySuggested(activity.id));
         if (light) {
             add('light-day', light.activity,
-                `Nothing logged yet today. ${light.activity.name} would lift your ${CATEGORY_NAMES[light.activity.category]} score.`, 5);
+                `Nothing logged yet today. ${light.activity.name} would lift your ${CATEGORY_NAMES[light.category]} score.`, 5);
         }
     }
-    const byId = new Map(activities.map((activity) => [activity.id, activity]));
+    const byId = new Map(scores.map((row) => [row.activityId, row]));
     const rank = (s: Suggestion) => IMPORTANCE_RANK[byId.get(s.activityId ?? '')?.importance ?? 'low'];
     const name = (s: Suggestion) => byId.get(s.activityId ?? '')?.name ?? '';
     // Within one priority, the same importance-then-name order as report rows.
