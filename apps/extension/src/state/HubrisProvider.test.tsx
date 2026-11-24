@@ -205,3 +205,26 @@ it('starts the new reporting week on Monday even when storage is unchanged', asy
     vi.useRealTimers();
   }
 });
+
+it('clears a polling error once the data revision can be read again', async () => {
+  vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+  vi.setSystemTime(new Date(2026, 10, 18, 12));
+  const readSnapshot = vi.spyOn(repository, 'readSnapshot');
+  const readDataRevision = vi.spyOn(repository, 'readDataRevision');
+  try {
+    render(<HubrisProvider><Consumer /></HubrisProvider>);
+    await screen.findByText('Status: ready');
+    readSnapshot.mockClear();
+    readDataRevision.mockRejectedValueOnce(new Error('Storage unavailable.'));
+
+    await act(() => vi.advanceTimersByTimeAsync(60_000));
+    await screen.findByText('Error: Storage unavailable.');
+
+    await act(() => vi.advanceTimersByTimeAsync(60_000));
+    await screen.findByText('Error: none');
+    expect(screen.getByText('Status: ready')).toBeTruthy();
+    expect(readSnapshot).not.toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
+});

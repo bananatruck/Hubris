@@ -70,6 +70,8 @@ export function HubrisProvider({ children }: { children: ReactNode }) {
           void reload();
           return;
         }
+        // The loaded snapshot matches storage, so an earlier read failure no longer applies.
+        setError(null);
         const current = new Date();
         setNow((previous) => formatDateKey(previous) !== formatDateKey(current)
           || current.getTime() >= nextClockChange.current || current < previous ? current : previous);
