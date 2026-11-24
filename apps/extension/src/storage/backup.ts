@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { DeletionTombstone, HubrisExport, TrackedActivity } from '@hubris/types';
 import { getDB } from './db';
+import { compareTimestamps } from './timestamps';
 import { readImportGeneration, withTransaction } from './transaction';
 import { activitySchema, activityVersionSchema, logSchema, ValidationError } from './validation';
 
@@ -117,21 +118,6 @@ export async function exportData(): Promise<HubrisExport> {
     ]);
     return { app: 'hubris', schemaVersion: 2, exportedAt: new Date().toISOString(), activities, logs, deletions };
   });
-}
-
-function compareTimestamps(left: string, right: string) {
-  const leftMilliseconds = Date.parse(left);
-  const rightMilliseconds = Date.parse(right);
-  if (leftMilliseconds !== rightMilliseconds) return leftMilliseconds > rightMilliseconds ? 1 : -1;
-
-  const fractionalDigits = (value: string) =>
-    (value.match(/\.(\d+)(?:Z|[+-]\d{2}:\d{2})$/)?.[1] ?? '').slice(3);
-  const leftExtra = fractionalDigits(left);
-  const rightExtra = fractionalDigits(right);
-  const width = Math.max(leftExtra.length, rightExtra.length);
-  const normalizedLeft = leftExtra.padEnd(width, '0');
-  const normalizedRight = rightExtra.padEnd(width, '0');
-  return normalizedLeft === normalizedRight ? 0 : normalizedLeft > normalizedRight ? 1 : -1;
 }
 
 export async function importData(data: HubrisExport, mode: 'replace' | 'merge') {

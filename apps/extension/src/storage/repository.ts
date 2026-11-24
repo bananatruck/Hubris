@@ -1,5 +1,6 @@
 import type { ActivityLog, DeletionTombstone, TrackedActivity } from '@hubris/types';
 import { getDB } from './db';
+import { compareTimestamps } from './timestamps';
 import { incrementDataRevision, readImportGeneration, withTransaction } from './transaction';
 import { activityInputSchema, logSchema, validate, ValidationError } from './validation';
 
@@ -68,7 +69,7 @@ export async function updateActivity(id: string, patch: ActivityPatch) {
       : [{ from: current.createdAt, category, timesPerWeek, importance, archived }];
     let versions = existingVersions;
     if (settingsChanged) {
-      versions = existingVersions.filter((version) => Date.parse(version.from) <= Date.parse(effectiveAt));
+      versions = existingVersions.filter((version) => compareTimestamps(version.from, effectiveAt) <= 0);
       const version = {
         from: effectiveAt,
         category: fields.category,
@@ -93,11 +94,10 @@ export async function deleteActivity(id: string) {
   return withTransaction(tx, async () => {
     const activity = await tx.objectStore('activities').get(id);
     const previousDeletion = await tx.objectStore('deletions').get(`activity:${id}`);
-    const deletedAt = new Date(Math.max(
-      Date.now(),
-      activity ? Date.parse(activity.updatedAt) + 1 : 0,
-      previousDeletion ? Date.parse(previousDeletion.deletedAt) : 0,
-    )).toISOString();
+    const candidate = new Date(Math.max(Date.now(), activity ? Date.parse(activity.updatedAt) + 1 : 0)).toISOString();
+    const deletedAt = previousDeletion && compareTimestamps(previousDeletion.deletedAt, candidate) > 0
+      ? previousDeletion.deletedAt
+      : candidate;
     const logs = await tx.objectStore('logs').index('activityId').getAll(id);
     await Promise.all(logs.flatMap((log) => [
       tx.objectStore('logs').delete(log.id),

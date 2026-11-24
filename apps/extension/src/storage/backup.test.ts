@@ -377,3 +377,35 @@ it('preserves the original put error and lets the transaction helper roll back r
   expect(await listLogs()).toEqual(previous.logs);
   expect(await getMeta('onboardingComplete')).toBeUndefined();
 });
+
+describe('timestamps below a millisecond', () => {
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('drops an imported later version on edit, so the export passes the import check', async () => {
+    vi.setSystemTime(new Date('2026-11-18T10:00:00.123Z'));
+    const data = await fixture();
+    const first = data.activities[0];
+    const future = { ...first.versions?.[0], from: '2026-11-18T10:00:00.1239Z', timesPerWeek: 5 } as NonNullable<typeof first.versions>[number];
+    await importData({ ...data, activities: [{ ...first, timesPerWeek: 5, versions: [...(first.versions ?? []), future] }] }, 'replace');
+
+    await updateActivity(first.id, { timesPerWeek: 4 });
+
+    const exported = await exportData();
+    expect(exported.activities[0].versions?.map((version) => version.from)).toEqual([
+      first.versions?.[0].from, '2026-11-18T10:00:00.123Z',
+    ]);
+    expect(parseBackup(JSON.stringify(exported)).success).toBe(true);
+  });
+
+  it('never moves an activity tombstone earlier when deleting again', async () => {
+    vi.setSystemTime(new Date('2026-11-18T10:00:00.123Z'));
+    const data = await fixture();
+    const deletedAt = '2026-11-18T10:00:00.1239Z';
+    await importData({ ...data, activities: [], logs: [], deletions: [{ key: 'activity:ghost', kind: 'activity', id: 'ghost', deletedAt }] }, 'replace');
+
+    await deleteActivity('ghost');
+
+    expect((await exportData()).deletions).toContainEqual({ key: 'activity:ghost', kind: 'activity', id: 'ghost', deletedAt });
+  });
+});
