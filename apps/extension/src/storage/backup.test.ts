@@ -235,7 +235,7 @@ it('converts and imports schema version 1 backups', async () => {
   expect(await listActivities()).toEqual(parsed.data.activities);
 });
 
-it.each(['empty versions', 'unsorted versions', 'last version mismatch', 'bad deletion key'])(
+it.each(['empty versions', 'unsorted versions', 'unsorted sub-millisecond versions', 'last version mismatch', 'bad deletion key'])(
   'rejects invalid schema version 2 history: %s',
   async (kind) => {
     const data = await fixture();
@@ -252,6 +252,16 @@ it.each(['empty versions', 'unsorted versions', 'last version mismatch', 'bad de
           ],
         }],
       },
+      'unsorted sub-millisecond versions': {
+        ...data,
+        activities: [{
+          ...first,
+          versions: [
+            { ...first.versions?.[0], from: '2026-01-01T00:00:00.1239Z' },
+            { ...first.versions?.[0], from: '2026-01-01T00:00:00.1231Z' },
+          ],
+        }],
+      },
       'last version mismatch': {
         ...data,
         activities: [{ ...first, versions: [{ ...first.versions?.[0], timesPerWeek: first.timesPerWeek + 1 }] }],
@@ -264,6 +274,15 @@ it.each(['empty versions', 'unsorted versions', 'last version mismatch', 'bad de
     expect(parseBackup(JSON.stringify(variants[kind])).success).toBe(false);
   },
 );
+it.each([
+  ['equal', '2026-01-01T00:00:00.1231Z', '2026-01-01T00:00:00.1231Z'],
+  ['sorted below a millisecond', '2026-01-01T00:00:00.1231Z', '2026-01-01T00:00:00.1239Z'],
+])('accepts schema version 2 history with %s version times', async (_kind, earlier, later) => {
+  const data = await fixture();
+  const first = data.activities[0];
+  const history = { ...data, activities: [{ ...first, versions: [{ ...first.versions?.[0], from: earlier }, { ...first.versions?.[0], from: later }] }] };
+  expect(parseBackup(JSON.stringify(history)).success).toBe(true);
+});
 it('rejects non-JSON', () => {
   expect(parseBackup('{')).toEqual({ success: false, errors: ['This file is not valid JSON.'] });
 });

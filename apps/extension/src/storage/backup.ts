@@ -8,7 +8,7 @@ const versionedActivitySchema = activitySchema.extend({
   versions: z.array(activityVersionSchema).min(1),
 }).superRefine((activity, ctx) => {
   for (let index = 1; index < activity.versions.length; index++) {
-    if (Date.parse(activity.versions[index - 1].from) > Date.parse(activity.versions[index].from)) {
+    if (compareTimestamps(activity.versions[index - 1].from, activity.versions[index].from) > 0) {
       ctx.addIssue({ code: 'custom', path: ['versions', index, 'from'], message: 'Activity versions must be sorted by from.' });
     }
   }
