@@ -21,18 +21,16 @@ export function HubrisProvider({ children }: { children: ReactNode }) {
   const nextClockChange = useRef(Infinity);
   const hasLoaded = useRef(false);
 
+  // Scores and suggestions change only at local midnight and at these stored instants, so the tick advances
+  // now at the first one that has passed. Days left are counted in calendar days, so midnight covers them.
   useEffect(() => {
     let next = Infinity;
     const cutoff = now.getTime();
-    for (const log of snapshot.logs) {
-      const time = Date.parse(log.loggedAt);
-      if (time > cutoff && time < next) next = time;
-    }
+    const consider = (time: number) => { if (time > cutoff && time < next) next = time; };
+    for (const log of snapshot.logs) consider(Date.parse(log.loggedAt));
     for (const activity of snapshot.activities) {
-      for (const version of activity.versions ?? []) {
-        const time = Date.parse(version.from);
-        if (time > cutoff && time < next) next = time;
-      }
+      consider(Date.parse(activity.createdAt));
+      for (const version of activity.versions ?? []) consider(Date.parse(version.from));
     }
     nextClockChange.current = next;
   }, [snapshot, now]);

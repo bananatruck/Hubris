@@ -228,3 +228,37 @@ it('clears a polling error once the data revision can be read again', async () =
     vi.useRealTimers();
   }
 });
+
+it('starts suggesting an activity when its creation time arrives without rereading storage', async () => {
+  vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+  vi.setSystemTime(new Date(2026, 10, 19, 15));
+  const createdAt = new Date(2026, 10, 19, 15, 0, 30).toISOString();
+  const from = new Date(2026, 10, 1).toISOString();
+  const readSnapshot = vi.spyOn(repository, 'readSnapshot').mockResolvedValue({
+    activities: [{
+      id: 'leetcode', name: 'Leetcode', category: 'career', timesPerWeek: 5, importance: 'high', archived: false,
+      createdAt, updatedAt: createdAt,
+      versions: [{ from, category: 'career', timesPerWeek: 5, importance: 'high', archived: false }],
+    }],
+    logs: [],
+    onboardingComplete: true,
+    dataRevision: 7,
+  });
+  vi.spyOn(repository, 'readDataRevision').mockResolvedValue(7);
+  function Suggestions() {
+    const { status, suggestions } = useHubris();
+    return <p>{status === 'ready' ? `Suggestions: ${suggestions.map((suggestion) => suggestion.message).join('|')}` : 'Loading'}</p>;
+  }
+  try {
+    render(<HubrisProvider><Suggestions /></HubrisProvider>);
+    await screen.findByText('Suggestions:');
+    readSnapshot.mockClear();
+
+    await act(() => vi.advanceTimersByTimeAsync(60_000));
+
+    await screen.findByText('Suggestions: Leetcode needs 5 more this week, with 4 days left.');
+    expect(readSnapshot).not.toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
+});
