@@ -1,6 +1,6 @@
 import type { ActivityLog, Importance, ScoredCategory, Suggestion, TrackedActivity } from '@hubris/types';
 import { formatDateKey } from './heatmap';
-import { isBehindPace } from './suggestions';
+import { calendarDaysLeft, isBehindPace } from './suggestions';
 import { computeWeeklyReport, SCORED_CATEGORIES } from './weighted-score';
 
 const IMPORTANCE_RANK: Readonly<Record<Importance, number>> = { high: 0, medium: 1, low: 2 };
@@ -34,7 +34,7 @@ export function generateWeeklySuggestions(
         return date <= now && formatDateKey(date) === today;
     }).map((log) => log.activityId));
     const end = new Date(report.weekEnd);
-    const daysLeft = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    const daysLeft = calendarDaysLeft(end, now);
     const suggestions: Suggestion[] = [];
     function add(type: Suggestion['type'], activity: TrackedActivity, message: string, priority: number): void {
         suggestions.push({

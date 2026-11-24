@@ -12,10 +12,20 @@ import {
 } from '@hubris/types';
 import { calculateFrequencyScore, getPeriodBoundaries } from './scoring';
 
-/** Whether remaining sessions exceed the whole or partial days left. */
+/**
+ * Local calendar days from the reference date through the period end, both included.
+ * Counting dates, not elapsed hours, keeps 23 and 25 hour daylight saving days at one day each.
+ */
+export function calendarDaysLeft(periodEnd: Date, referenceDate: Date): number {
+    if (referenceDate > periodEnd) return 0;
+    const today = Date.UTC(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+    const last = Date.UTC(periodEnd.getFullYear(), periodEnd.getMonth(), periodEnd.getDate());
+    return Math.round((last - today) / (1000 * 60 * 60 * 24)) + 1;
+}
+
+/** Whether remaining sessions exceed the local calendar days left, today included. */
 export function isBehindPace(remaining: number, periodEnd: Date, referenceDate: Date): boolean {
-    const daysRemaining = (periodEnd.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24);
-    return remaining > Math.ceil(daysRemaining);
+    return remaining > calendarDaysLeft(periodEnd, referenceDate);
 }
 
 /**
