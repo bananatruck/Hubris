@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AlertCircle, BarChart3, CalendarCheck2, Clock, PanelRightOpen, RotateCcw, Settings } from 'lucide-react';
-import type { ActivityLog } from '@hubris/types';
+import type { LogUndo } from '../storage/repository';
 import { useHubris } from '../state/useHubris';
 import { NotificationContext, type Notification } from './lib/notify';
 import { errorMessage } from './lib/errors';
@@ -98,14 +98,14 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
   };
 
   const handleLogged = useCallback(
-    (activityName: string, log: ActivityLog) => {
+    (activityName: string, undo: LogUndo) => {
       addToast({
-        id: log.id,
+        id: undo.log.id,
         tone: 'info',
         message: `${activityName} logged`,
         undoLabel: `Undo ${activityName}`,
         onUndo: () => {
-          void actions.undoLog(log).catch(() => {
+          void actions.undoLog(undo).catch(() => {
             addToast({
               id: crypto.randomUUID(),
               message: 'Could not undo. The log is still there.',

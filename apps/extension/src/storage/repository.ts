@@ -1,11 +1,17 @@
 import type { ActivityLog, DeletionTombstone, TrackedActivity } from '@hubris/types';
 import { getDB } from './db';
-import { incrementDataRevision, withTransaction } from './transaction';
+import { incrementDataRevision, readImportGeneration, withTransaction } from './transaction';
 import { activityInputSchema, logSchema, validate, ValidationError } from './validation';
 
 export { ValidationError } from './validation';
 export type CreateActivityInput = Omit<TrackedActivity, 'id' | 'createdAt' | 'updatedAt' | 'archived' | 'versions'> & { archived?: boolean };
 export type ActivityPatch = Partial<Omit<TrackedActivity, 'id' | 'createdAt' | 'updatedAt' | 'versions'>>;
+
+/** A new log with the import generation it was written in. Undo is refused once an import has run since. */
+export interface LogUndo {
+  log: ActivityLog;
+  importGeneration: number;
+}
 
 /**
  * A merged backup can carry an updatedAt from a device whose clock ran ahead.
@@ -103,14 +109,20 @@ export async function deleteActivity(id: string) {
   });
 }
 export async function addLog(activityId: string, note?: string, at: Date = new Date()) {
+  return (await addUndoableLog(activityId, note, at)).log;
+}
+export async function addUndoableLog(activityId: string, note?: string, at: Date = new Date()): Promise<LogUndo> {
   if (Number.isNaN(at.getTime())) throw new ValidationError('Choose a valid log date.');
   const log: ActivityLog = validate(logSchema, {
     id: crypto.randomUUID(), activityId, loggedAt: at.toISOString(), ...(note === undefined ? {} : { note }),
   });
-  await restoreLog(log);
-  return log;
+  return { log, importGeneration: await writeLog(log) };
 }
 export async function restoreLog(log: ActivityLog) {
+  await writeLog(log);
+}
+/** Stores a log and returns the import generation read in the same transaction. */
+async function writeLog(log: ActivityLog) {
   const checked = validate(logSchema, log);
   const db = await getDB();
   const tx = db.transaction(['activities', 'logs', 'deletions', 'meta'], 'readwrite');
@@ -119,6 +131,7 @@ export async function restoreLog(log: ActivityLog) {
     await tx.objectStore('logs').put(checked);
     await tx.objectStore('deletions').delete(`log:${checked.id}`);
     await incrementDataRevision(tx.objectStore('meta'));
+    return readImportGeneration(tx.objectStore('meta'));
   });
 }
 export async function deleteLog(id: string) {
@@ -131,13 +144,12 @@ export async function deleteLog(id: string) {
     await incrementDataRevision(tx.objectStore('meta'));
   });
 }
-export async function undoLog(log: ActivityLog) {
+export async function undoLog({ log, importGeneration }: LogUndo) {
   const checked = validate(logSchema, log);
   const db = await getDB();
   const tx = db.transaction(['logs', 'meta', 'deletions'], 'readwrite');
   return withTransaction(tx, async () => {
-    const lastImportAt = await tx.objectStore('meta').get('lastImportAt');
-    if (typeof lastImportAt === 'string' && Date.parse(lastImportAt) > Date.parse(checked.loggedAt)) {
+    if (await readImportGeneration(tx.objectStore('meta')) !== importGeneration) {
       throw new ValidationError(
         'An import changed your data after this log, so Undo is no longer available. You can delete the log in History.',
       );
@@ -168,6 +180,8 @@ export async function eraseAll() {
   const tx = db.transaction(['activities', 'logs', 'meta', 'deletions'], 'readwrite');
   return withTransaction(tx, async () => {
     const revision = await tx.objectStore('meta').get('dataRevision');
+    // Kept across the erase so a later import still blocks Undo handles issued before it.
+    const importGeneration = await readImportGeneration(tx.objectStore('meta'));
     await Promise.all([
       tx.objectStore('activities').clear(),
       tx.objectStore('logs').clear(),
@@ -175,6 +189,7 @@ export async function eraseAll() {
       tx.objectStore('deletions').clear(),
     ]);
     await tx.objectStore('meta').put((typeof revision === 'number' ? revision : 0) + 1, 'dataRevision');
+    if (importGeneration) await tx.objectStore('meta').put(importGeneration, 'importGeneration');
   });
 }
 

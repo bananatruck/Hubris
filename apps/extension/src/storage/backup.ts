@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { DeletionTombstone, HubrisExport, TrackedActivity } from '@hubris/types';
 import { getDB } from './db';
-import { withTransaction } from './transaction';
+import { readImportGeneration, withTransaction } from './transaction';
 import { activitySchema, activityVersionSchema, logSchema, ValidationError } from './validation';
 
 const versionedActivitySchema = activitySchema.extend({
@@ -137,13 +137,13 @@ function compareTimestamps(left: string, right: string) {
 export async function importData(data: HubrisExport, mode: 'replace' | 'merge') {
   const checked = checkedCurrentBackupSchema.safeParse(data);
   if (!checked.success) throw new ValidationError(checked.error.issues.map((issue) => issue.message).join(' '));
-  const lastImportAt = new Date().toISOString();
   const db = await getDB();
   const tx = db.transaction(['activities', 'logs', 'meta', 'deletions'], 'readwrite');
   return withTransaction(tx, async () => {
     let activities = 0;
     let logs = 0;
     const revision = await tx.objectStore('meta').get('dataRevision');
+    const importGeneration = await readImportGeneration(tx.objectStore('meta'));
     if (mode === 'replace') {
       await Promise.all([
         tx.objectStore('activities').clear(),
@@ -205,7 +205,7 @@ export async function importData(data: HubrisExport, mode: 'replace' | 'merge') 
       }
     }
     await tx.objectStore('meta').put(true, 'onboardingComplete');
-    await tx.objectStore('meta').put(lastImportAt, 'lastImportAt');
+    await tx.objectStore('meta').put(importGeneration + 1, 'importGeneration');
     await tx.objectStore('meta').put((typeof revision === 'number' ? revision : 0) + 1, 'dataRevision');
     return { activities, logs };
   });

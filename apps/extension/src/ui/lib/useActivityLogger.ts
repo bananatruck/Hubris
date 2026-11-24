@@ -1,10 +1,10 @@
 import { useCallback, useRef, useState } from 'react';
-import type { ActivityLog } from '@hubris/types';
 import { useHubris } from '../../state/useHubris';
+import type { LogUndo } from '../../storage/repository';
 import { errorMessage } from './errors';
 import { useNotify } from './notify';
 
-export type ActivityLoggedHandler = (activityName: string, log: ActivityLog) => void;
+export type ActivityLoggedHandler = (activityName: string, undo: LogUndo) => void;
 
 export function useActivityLogger(onLogged: ActivityLoggedHandler) {
   const { actions } = useHubris();
@@ -17,8 +17,8 @@ export function useActivityLogger(onLogged: ActivityLoggedHandler) {
     pendingWrites.current.add(activityId);
     setPendingIds(new Set(pendingWrites.current));
     try {
-      const createdLog = await actions.logActivity(activityId);
-      onLogged(activityName, createdLog);
+      const undo = await actions.logActivity(activityId);
+      onLogged(activityName, undo);
     } catch (cause) {
       notify({ message: errorMessage(cause), tone: 'error' });
     } finally {

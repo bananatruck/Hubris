@@ -99,9 +99,9 @@ export function HubrisProvider({ children }: { children: ReactNode }) {
       updateActivity: (id, patch) => write(() => repository.updateActivity(id, patch)),
       setArchived: (id, archived) => write(() => repository.setArchived(id, archived)),
       deleteActivity: (id) => write(() => repository.deleteActivity(id)),
-      logActivity: (id, note) => write(() => repository.addLog(id, note)),
+      logActivity: (id, note) => write(() => repository.addUndoableLog(id, note)),
       // Undo reverses the newly created log; restoreLog remains available for deletion undo.
-      undoLog: (log) => write(() => repository.undoLog(log)),
+      undoLog: (undo) => write(() => repository.undoLog(undo)),
       deleteLog: (id) => write(() => repository.deleteLog(id)),
       exportBackup: async () => { downloadBackup(await exportData()); },
       importBackup: async (file, mode) => {

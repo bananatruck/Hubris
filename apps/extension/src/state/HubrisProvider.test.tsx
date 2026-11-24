@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { formatDateKey } from '@hubris/core';
@@ -5,9 +6,11 @@ import { HubrisProvider } from './HubrisProvider';
 import { useHubris } from './useHubris';
 import { addLog, createActivity, eraseAll } from '../storage/repository';
 import * as repository from '../storage/repository';
+import type { LogUndo } from '../storage/repository';
 
 function Consumer() {
   const state = useHubris();
+  const [undo, setUndo] = useState<LogUndo | null>(null);
   return <>
     <p>Status: {state.status}</p>
     <p>Score: {state.report.overall}</p>
@@ -16,8 +19,8 @@ function Consumer() {
     <p>Heatmap: {state.heatmap.length}</p>
     <p>Today: {formatDateKey(state.now)}</p>
     <p>Error: {state.error ?? 'none'}</p>
-    <button onClick={() => { const activity = state.activities[0]; if (activity) void state.actions.logActivity(activity.id); }}>Log</button>
-    <button onClick={() => { const log = state.logs[0]; if (log) void state.actions.undoLog(log); }}>Undo</button>
+    <button onClick={() => { const activity = state.activities[0]; if (activity) void state.actions.logActivity(activity.id).then(setUndo); }}>Log</button>
+    <button onClick={() => { if (undo) void state.actions.undoLog(undo); }}>Undo</button>
     <button onClick={() => void state.actions.retry()}>Retry</button>
   </>;
 }
@@ -63,14 +66,17 @@ it('keeps loaded data ready when a refresh fails', async () => {
 
 it('delegates Undo to the repository import-aware undo operation', async () => {
   const activity = await createActivity({ name: 'Practice', category: 'career', timesPerWeek: 1, importance: 'high' });
-  const log = await addLog(activity.id);
   const undoLog = vi.spyOn(repository, 'undoLog');
   render(<HubrisProvider><Consumer /></HubrisProvider>);
+  await screen.findByText('Status: ready');
+  fireEvent.click(screen.getByRole('button', { name: 'Log' }));
   await screen.findByText('Logs: 1');
 
   fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
 
-  await waitFor(() => { expect(undoLog).toHaveBeenCalledWith(log); });
+  await waitFor(() => {
+    expect(undoLog).toHaveBeenCalledWith({ log: expect.objectContaining({ activityId: activity.id }), importGeneration: 0 });
+  });
   await screen.findByText('Logs: 0');
 });
 

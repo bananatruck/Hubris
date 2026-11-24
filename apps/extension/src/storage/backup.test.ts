@@ -1,8 +1,8 @@
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { HubrisExport } from '@hubris/types';
 import { computeWeeklyReport } from '@hubris/core';
 import {
-  createActivity, addLog, deleteActivity, deleteLog, eraseAll, listActivities, listLogs, getMeta, updateActivity,
+  createActivity, addLog, addUndoableLog, deleteActivity, deleteLog, eraseAll, listActivities, listLogs, getMeta, updateActivity,
   readDataRevision, undoLog,
 } from './repository';
 import { createBackupDownload, exportData, importData, parseBackup } from './backup';
@@ -32,28 +32,60 @@ it('round trips export, parse, replace and downloadable JSON', async () => {
   expect(JSON.parse(await download.blob.text())).toEqual(data);
 });
 
-it('records the import time for both modes and blocks undoing a pre-import log', async () => {
-  vi.useFakeTimers({ toFake: ['Date'] });
-  try {
+it('counts imports in both modes, keeps the count across an erase, and blocks undoing a pre-import log', async () => {
+  const activity = await createActivity({ name: 'Gym', category: 'health', timesPerWeek: 3, importance: 'high' });
+  const undo = await addUndoableLog(activity.id);
+  const before = undo.importGeneration;
+  const data = await exportData();
+
+  await importData(data, 'replace');
+  expect(await getMeta('importGeneration')).toBe(before + 1);
+  await expect(undoLog(undo)).rejects.toThrow(
+    'An import changed your data after this log, so Undo is no longer available. You can delete the log in History.',
+  );
+  expect(await listLogs()).toEqual([undo.log]);
+
+  await importData(data, 'merge');
+  expect(await getMeta('importGeneration')).toBe(before + 2);
+  await eraseAll();
+  expect(await getMeta('importGeneration')).toBe(before + 2);
+});
+
+describe('Undo across imports', () => {
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); });
+  afterEach(() => { vi.useRealTimers(); });
+  const undoBlocked = 'An import changed your data after this log, so Undo is no longer available. You can delete the log in History.';
+
+  it('blocks Undo for a log that an import in the same millisecond replaced', async () => {
     vi.setSystemTime(new Date('2026-11-18T10:00:00.000Z'));
     const activity = await createActivity({ name: 'Gym', category: 'health', timesPerWeek: 3, importance: 'high' });
-    const log = await addLog(activity.id);
+    const undo = await addUndoableLog(activity.id);
+    await importData(await exportData(), 'replace');
+    await expect(undoLog(undo)).rejects.toThrow(undoBlocked);
+    expect(await listLogs()).toEqual([undo.log]);
+  });
+
+  it('blocks Undo for a pre-import log after the clock moved back', async () => {
+    vi.setSystemTime(new Date('2026-11-18T10:00:00.000Z'));
+    const activity = await createActivity({ name: 'Gym', category: 'health', timesPerWeek: 3, importance: 'high' });
+    const undo = await addUndoableLog(activity.id);
     const data = await exportData();
-
-    vi.setSystemTime(new Date('2026-11-18T11:00:00.000Z'));
+    vi.setSystemTime(new Date('2026-11-18T09:00:00.000Z'));
     await importData(data, 'replace');
-    expect(await getMeta('lastImportAt')).toBe('2026-11-18T11:00:00.000Z');
-    await expect(undoLog(log)).rejects.toThrow(
-      'An import changed your data after this log, so Undo is no longer available. You can delete the log in History.',
-    );
-    expect(await listLogs()).toEqual([log]);
+    await expect(undoLog(undo)).rejects.toThrow(undoBlocked);
+    expect(await listLogs()).toEqual([undo.log]);
+  });
 
-    vi.setSystemTime(new Date('2026-11-18T12:00:00.000Z'));
-    await importData(data, 'merge');
-    expect(await getMeta('lastImportAt')).toBe('2026-11-18T12:00:00.000Z');
-  } finally {
-    vi.useRealTimers();
-  }
+  it('keeps Undo for logs created after an import, in the same millisecond or backdated', async () => {
+    vi.setSystemTime(new Date('2026-11-18T10:00:00.000Z'));
+    const activity = await createActivity({ name: 'Gym', category: 'health', timesPerWeek: 3, importance: 'high' });
+    await importData(await exportData(), 'merge');
+    const sameMillisecond = await addUndoableLog(activity.id);
+    const backdated = await addUndoableLog(activity.id, undefined, new Date('2026-11-17T08:00:00.000Z'));
+    await undoLog(sameMillisecond);
+    await undoLog(backdated);
+    expect(await listLogs()).toEqual([]);
+  });
 });
 
 it('merges newer activities, retains newer local records and dedupes logs', async () => {

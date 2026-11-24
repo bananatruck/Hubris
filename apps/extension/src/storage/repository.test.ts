@@ -79,9 +79,10 @@ describe('repository', () => {
 
   it('undoes a log through one transaction and writes its tombstone', async () => {
     const activity = await repo.createActivity(input);
-    const log = await repo.addLog(activity.id);
+    const undo = await repo.addUndoableLog(activity.id);
+    const { log } = undo;
 
-    await repo.undoLog(log);
+    await repo.undoLog(undo);
 
     expect(await repo.listLogs()).toEqual([]);
     expect(await (await getDB()).get('deletions', `log:${log.id}`)).toMatchObject({ id: log.id, kind: 'log' });

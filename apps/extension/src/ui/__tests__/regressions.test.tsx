@@ -17,7 +17,7 @@ function makeState(overrides: Partial<HubrisState> = {}, actionOverrides: Partia
   const actions: HubrisState['actions'] = {
     createActivity: vi.fn(async () => activity), updateActivity: vi.fn(async () => activity),
     setArchived: vi.fn(async () => activity), deleteActivity: vi.fn(async () => {}),
-    logActivity: vi.fn(async () => log), undoLog: vi.fn(async () => {}), deleteLog: vi.fn(async () => {}),
+    logActivity: vi.fn(async () => ({ log, importGeneration: 0 })), undoLog: vi.fn(async () => {}), deleteLog: vi.fn(async () => {}),
     exportBackup: vi.fn(async () => {}), importBackup: vi.fn(async () => ({ activities: 1, logs: 1 })),
     eraseAll: vi.fn(async () => {}), completeOnboarding: vi.fn(async () => {}), retry: vi.fn(async () => {}),
     ...actionOverrides,
@@ -104,11 +104,11 @@ it('keeps a newer log Undo available when an older Undo fails', async () => {
     rejectUndo = reject;
   }));
   const reading = { ...activity, id: 'b', name: 'Reading' };
-  const practiceLog = { ...log, id: 'practice-log' };
-  const readingLog = { ...log, id: 'reading-log', activityId: reading.id };
+  const practiceUndo = { log: { ...log, id: 'practice-log' }, importGeneration: 0 };
+  const readingUndo = { log: { ...log, id: 'reading-log', activityId: reading.id }, importGeneration: 0 };
   const logActivity = vi.fn<HubrisState['actions']['logActivity']>()
-    .mockResolvedValueOnce(practiceLog)
-    .mockResolvedValueOnce(readingLog);
+    .mockResolvedValueOnce(practiceUndo)
+    .mockResolvedValueOnce(readingUndo);
   setup(
     {
       activities: [activity, reading],
@@ -131,11 +131,11 @@ it('keeps a newer log Undo available when an older Undo fails', async () => {
 it('keeps each recent log independently undoable', async () => {
   vi.useFakeTimers();
   const reading = { ...activity, id: 'b', name: 'Reading' };
-  const practiceLog = { ...log, id: 'practice-log' };
-  const readingLog = { ...log, id: 'reading-log', activityId: reading.id };
+  const practiceUndo = { log: { ...log, id: 'practice-log' }, importGeneration: 0 };
+  const readingUndo = { log: { ...log, id: 'reading-log', activityId: reading.id }, importGeneration: 0 };
   const logActivity = vi.fn<HubrisState['actions']['logActivity']>()
-    .mockResolvedValueOnce(practiceLog)
-    .mockResolvedValueOnce(readingLog);
+    .mockResolvedValueOnce(practiceUndo)
+    .mockResolvedValueOnce(readingUndo);
   const actions = setup(
     {
       activities: [activity, reading],
@@ -152,18 +152,18 @@ it('keeps each recent log independently undoable', async () => {
   });
 
   fireEvent.click(screen.getByRole('button', { name: 'Undo Reading' }));
-  expect(actions.undoLog).toHaveBeenCalledWith(readingLog);
+  expect(actions.undoLog).toHaveBeenCalledWith(readingUndo);
   expect(screen.getByRole('button', { name: 'Undo Practice' })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Undo Practice' }));
-  expect(actions.undoLog).toHaveBeenCalledWith(practiceLog);
+  expect(actions.undoLog).toHaveBeenCalledWith(practiceUndo);
 });
 
 it('expires each recent log on its own timer', async () => {
   vi.useFakeTimers();
   const reading = { ...activity, id: 'b', name: 'Reading' };
   const logActivity = vi.fn<HubrisState['actions']['logActivity']>()
-    .mockResolvedValueOnce({ ...log, id: 'practice-log' })
-    .mockResolvedValueOnce({ ...log, id: 'reading-log', activityId: reading.id });
+    .mockResolvedValueOnce({ log: { ...log, id: 'practice-log' }, importGeneration: 0 })
+    .mockResolvedValueOnce({ log: { ...log, id: 'reading-log', activityId: reading.id }, importGeneration: 0 });
   setup(
     {
       activities: [activity, reading],
@@ -194,7 +194,7 @@ it('keeps every recent log undoable when more than three logs are added', async 
   }));
   const logActivity = vi.fn<HubrisState['actions']['logActivity']>();
   activities.forEach((item, index) => {
-    logActivity.mockResolvedValueOnce({ ...log, id: `log-${index}`, activityId: item.id });
+    logActivity.mockResolvedValueOnce({ log: { ...log, id: `log-${index}`, activityId: item.id }, importGeneration: 0 });
   });
   setup(
     {
