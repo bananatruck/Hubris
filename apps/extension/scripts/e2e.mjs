@@ -298,7 +298,12 @@ try {
     await region.scrollIntoViewIfNeeded();
     await screenshot(popup, 'popup-suggestions.png');
     await region.getByRole('button', { name: 'Log Meditation', exact: true }).click();
-    await popup.getByText('Meditation logged', { exact: true }).waitFor({ state: 'visible' });
+    // The toast shows the message in its card and repeats it in an sr-only live region, so check each one on its own.
+    await popup.getByRole('status').filter({ hasText: /^Meditation logged$/ }).waitFor({ state: 'attached' });
+    await popup.getByText('Meditation logged', { exact: true })
+      .and(popup.locator(':not([role="status"])'))
+      .waitFor({ state: 'visible' });
+    await popup.getByRole('button', { name: 'Undo Meditation', exact: true }).waitFor({ state: 'visible' });
     await streak.waitFor({ state: 'hidden' });
   });
 } catch (error) {
