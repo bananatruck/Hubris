@@ -20,6 +20,37 @@ describe('Toast live region', () => {
   });
 });
 
+describe('Toast announcements', () => {
+  const alpha = (id: string): ToastData => ({ id, message: 'Alpha logged', undoLabel: 'Undo Alpha', onUndo: vi.fn() });
+
+  it('announces a repeated message again as a new update', () => {
+    const { rerender } = render(<Toast toasts={[alpha('a1')]} onDismiss={vi.fn()} />);
+    const region = screen.getByRole('status');
+    const first = region.firstElementChild;
+    expect(region.textContent).toBe('Alpha logged');
+
+    rerender(<Toast toasts={[alpha('a1'), alpha('a2')]} onDismiss={vi.fn()} />);
+    expect(screen.getByRole('status')).toBe(region);
+    expect(region.textContent).toBe('Alpha logged');
+    expect(region.firstElementChild).not.toBe(first);
+  });
+
+  it('does not announce an older message again when the newest toast is dismissed', () => {
+    const beta: ToastData = { id: 'b', message: 'Beta logged' };
+    const { rerender } = render(<Toast toasts={[alpha('a1'), beta]} onDismiss={vi.fn()} />);
+    const region = screen.getByRole('status');
+    const announcement = region.firstElementChild;
+    expect(region.textContent).toBe('Beta logged');
+
+    rerender(<Toast toasts={[alpha('a1')]} onDismiss={vi.fn()} />);
+    expect(region.firstElementChild).toBe(announcement);
+    expect(region.textContent).toBe('Beta logged');
+
+    rerender(<Toast toasts={[]} onDismiss={vi.fn()} />);
+    expect(region.textContent).toBe('');
+  });
+});
+
 it('styles error notifications red and never offers Undo', () => {
   const { container } = render(<Toast toasts={[{ id: 'error', tone: 'error', message: 'Storage is full.' }]} onDismiss={vi.fn()} />);
   expect(container.querySelector('.border-red-500\\/60')).toBeTruthy();

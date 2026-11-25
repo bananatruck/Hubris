@@ -25,12 +25,22 @@ export function Toast({
   durationMs = 6000,
   className,
 }: ToastProps) {
-  const newest = toasts.at(-1);
+  // Each notification is announced once, when it arrives. A keyed node per notification makes a repeated
+  // message a new update, and dismissing the newest toast leaves the region alone instead of re-reading an older one.
+  const [knownIds, setKnownIds] = useState<readonly string[]>([]);
+  const [announcement, setAnnouncement] = useState<{ id: string; text: string } | null>(null);
+  const ids = toasts.map((toast) => toast.id);
+  if (ids.join('\n') !== knownIds.join('\n')) {
+    const arrived = toasts.filter((toast) => !knownIds.includes(toast.id)).at(-1);
+    setKnownIds(ids);
+    if (arrived) setAnnouncement({ id: arrived.id, text: [arrived.message, arrived.errorMessage].filter(Boolean).join(' ') });
+    else if (toasts.length === 0) setAnnouncement(null);
+  }
 
   return (
     <>
       <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-        {newest ? [newest.message, newest.errorMessage].filter(Boolean).join(' ') : ''}
+        {announcement && <span key={announcement.id}>{announcement.text}</span>}
       </div>
       <div className="fixed bottom-16 left-3 right-3 z-50 mx-auto flex max-h-[calc(100dvh-5rem)] max-w-[356px] flex-col gap-2 overflow-y-auto">
         {toasts.map((toast) => (
