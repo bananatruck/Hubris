@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef } from 'react';
 import { Flame, Hourglass, Sun } from 'lucide-react';
+import { activeReportCategories } from '@hubris/core';
 import type { Suggestion } from '@hubris/types';
 import { useHubris } from '../../state/useHubris';
 import { CATEGORY_BY_ID } from '../lib/categories';
@@ -20,7 +21,7 @@ function SuggestionIcon({ type }: { type: Suggestion['type'] }) {
 
 export function SuggestionList({ pendingIds, onLog }: SuggestionListProps) {
   const headingId = useId();
-  const { activities, suggestions } = useHubris();
+  const { activities, report, suggestions } = useHubris();
   const listRef = useRef<HTMLUListElement>(null);
   // The suggestion a keyboard or pointer user just logged, and where it sat in the list.
   const pendingFocus = useRef<{ activityId: string; index: number } | null>(null);
@@ -37,12 +38,13 @@ export function SuggestionList({ pendingIds, onLog }: SuggestionListProps) {
       ?? document.querySelector<HTMLElement>(`[data-log-activity="${CSS.escape(pending.activityId)}"]`);
     target?.focus();
   }, [suggestedIds]);
-  const activeActivities = activities.filter((activity) => !activity.archived);
-  if (activeActivities.length === 0) return null;
+  const active = activeReportCategories(report);
+  if (active.size === 0) return null;
 
   const rows = suggestions.slice(0, 3).flatMap((suggestion) => {
-    const activity = activeActivities.find((candidate) => candidate.id === suggestion.activityId);
-    return activity ? [{ activity, suggestion }] : [];
+    const activity = activities.find((candidate) => candidate.id === suggestion.activityId);
+    const categoryId = activity && active.get(activity.id);
+    return activity && categoryId ? [{ activity, suggestion, category: CATEGORY_BY_ID[categoryId] }] : [];
   });
 
   return (
@@ -54,8 +56,7 @@ export function SuggestionList({ pendingIds, onLog }: SuggestionListProps) {
         <p className="text-xs text-muted">You are on pace this week.</p>
       ) : (
         <ul ref={listRef} className="space-y-1.5">
-          {rows.map(({ activity, suggestion }, index) => {
-            const category = CATEGORY_BY_ID[activity.category];
+          {rows.map(({ activity, suggestion, category }, index) => {
             return (
               <li key={suggestion.id}>
                 <SpotlightCard

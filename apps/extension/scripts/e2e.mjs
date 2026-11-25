@@ -301,10 +301,50 @@ try {
     // The toast shows the message in its card and repeats it in an sr-only live region, so check each one on its own.
     await popup.getByRole('status').filter({ hasText: /^Meditation logged$/ }).waitFor({ state: 'attached' });
     await popup.getByText('Meditation logged', { exact: true })
-      .and(popup.locator(':not([role="status"])'))
+      .and(popup.locator(':not([role="status"], [role="status"] *)'))
       .waitFor({ state: 'visible' });
     await popup.getByRole('button', { name: 'Undo Meditation', exact: true }).waitFor({ state: 'visible' });
     await streak.waitFor({ state: 'hidden' });
+  });
+
+  await step(10, 'keyboard focus is visible on the backup file chooser', async () => {
+    await selectTab(popup, 'Settings');
+    const input = popup.getByLabel('Import backup file', { exact: true });
+    const labelShadow = () => popup.evaluate(() => {
+      const field = document.querySelector('input[type="file"]');
+      return getComputedStyle(document.querySelector(`label[for="${CSS.escape(field.id)}"]`)).boxShadow;
+    });
+    const unfocused = await labelShadow();
+    await popup.getByRole('tab', { name: 'Settings', exact: true }).focus();
+    let reachedInput = false;
+    for (let presses = 0; presses < 80 && !reachedInput; presses += 1) {
+      await popup.keyboard.press('Shift+Tab');
+      reachedInput = await input.evaluate((element) => element === document.activeElement);
+    }
+    assert(reachedInput, 'Keyboard focus never reached the backup file input');
+    const focused = await labelShadow();
+    assert.notEqual(focused, 'none', 'The backup file label shows no focus ring');
+    assert.notEqual(focused, unfocused, 'The backup file label looks the same with and without focus');
+  });
+
+  await step(11, 'cards keep their spacing, dividers and spotlight', async () => {
+    await selectTab(popup, 'Settings');
+    const layout = await popup.evaluate(() => {
+      const panel = document.querySelector('[role="tabpanel"][data-state="active"]');
+      const first = (selector) => [...panel.querySelectorAll(selector)].find((card) => card.children.length > 1);
+      const divided = first('.rounded-xl.divide-y');
+      const spaced = first('.rounded-xl[class*="space-y-"]');
+      return {
+        divider: divided && getComputedStyle(divided.children[0]).borderBottomWidth,
+        spacing: spaced && getComputedStyle(spaced.children[0]).marginBottom,
+      };
+    });
+    assert(layout.divider && layout.divider !== '0px', `Activity rows lost their divider: ${layout.divider}`);
+    assert(layout.spacing && layout.spacing !== '0px', `Card blocks lost their spacing: ${layout.spacing}`);
+    const card = popup.locator('[role="tabpanel"][data-state="active"] .rounded-xl.divide-y').first();
+    await card.hover();
+    const background = await card.evaluate((element) => getComputedStyle(element).backgroundImage);
+    assert(background.includes('radial-gradient'), `No spotlight under the pointer: ${background}`);
   });
 } catch (error) {
   failed = true;

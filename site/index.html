@@ -11,7 +11,7 @@
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
     <header>
-      <a class="brand" href="#top" aria-label="Hubris home"><span class="mark">H</span><span>Hubris</span></a>
+      <a class="brand" href="#top" aria-label="Hubris home"><span class="mark" aria-hidden="true">H</span><span>Hubris</span></a>
       <nav aria-label="Primary navigation"><a href="#rhythm">Rhythm</a><a href="#scores">Scores</a><a href="#features">Features</a><a href="#local">Local first</a></nav>
       <a class="repo" href="https://github.com/bananatruck/Hubris">GitHub <span>↗</span></a>
     </header>
@@ -27,14 +27,14 @@
           <div class="pill-row"><span>Career</span><span>Health</span><span>Hobbies</span><span>Entertainment</span></div>
         </div>
 
-        <div class="phone-wrap" aria-label="Hubris mobile app preview">
+        <div class="phone-wrap" role="img" aria-label="Hubris mobile app preview">
           <div class="phone">
             <div class="phone-bar"><span>9:41</span><i></i><b>•••</b></div>
             <div class="app-head"><div><small>GOOD MORNING</small><b>Make today count.</b></div><span>K</span></div>
-            <div class="focus"><small>FOCUS FOR THIS WEEK</small><p>Career is catching up. One focused session gets you back on track.</p><a href="#scores">View score →</a></div>
+            <div class="focus"><small>FOCUS FOR THIS WEEK</small><p>Career is catching up. One focused session gets you back on track.</p><span class="focus-link">View score →</span></div>
             <div class="today"><header><b>Today’s plans</b><span>2 of 3</span></header><article class="done"><i></i><div><b>Morning run</b><small>7:30 AM · 30 min</small></div><span>✓</span></article><article><i class="blue"></i><div><b>Leetcode practice</b><small>5:00 PM · 45 min</small></div><span>○</span></article><article><i class="pink"></i><div><b>Read one chapter</b><small>9:00 PM · 20 min</small></div><span>○</span></article></div>
             <div class="week"><header><span><small>THIS WEEK</small><b>78</b></span><i>Nice progress. Keep going.</i></header><div class="mini-stats"><span><b>14</b><small>Completed</small></span><span><b>4</b><small>Remaining</small></span><span><b>🔥 8</b><small>Day streak</small></span></div></div>
-            <nav class="phone-nav" aria-label="Decorative app tabs"><span class="active">⌂<small>Today</small></span><span>↗<small>Career</small></span><span>♡<small>Health</small></span><span>✦<small>Hobbies</small></span></nav>
+            <div class="phone-nav"><span class="active">⌂<small>Today</small></span><span>↗<small>Career</small></span><span>♡<small>Health</small></span><span>✦<small>Hobbies</small></span></div>
           </div>
           <div class="float-card"><small>QUICK LOG</small><b>2 seconds</b><span>Tap. Count it. Move on.</span></div>
         </div>
@@ -44,7 +44,7 @@
         <div class="section-heading"><p class="eyebrow"><span></span> Less friction, more truth</p><h2>Tracking should fit inside the life you’re tracking.</h2></div>
         <div class="rhythm-grid">
           <article><span>01</span><div><h3>Log in two seconds.</h3><p>Record an activity with one tap. Add details only when the moment deserves them.</p></div><div class="tap-demo"><i>+</i><span><b>Leetcode</b><small>logged just now</small></span><strong>✓</strong></div></article>
-          <article><span>02</span><div><h3>See your consistency.</h3><p>A GitHub-style heatmap makes momentum visible without punishing an imperfect day.</p></div><div class="heatmap" aria-label="Example activity heatmap"><i></i><i></i><i class="l1"></i><i class="l2"></i><i></i><i class="l3"></i><i class="l4"></i><i class="l2"></i><i class="l1"></i><i></i><i class="l2"></i><i class="l3"></i><i class="l3"></i><i class="l4"></i><i class="l2"></i><i class="l1"></i><i class="l3"></i><i></i><i class="l4"></i><i class="l4"></i><i class="l2"></i><i class="l3"></i><i class="l1"></i><i></i><i class="l2"></i><i class="l4"></i><i class="l3"></i><i class="l1"></i></div></article>
+          <article><span>02</span><div><h3>See your consistency.</h3><p>A GitHub-style heatmap makes momentum visible without punishing an imperfect day.</p></div><div class="heatmap" role="img" aria-label="Example activity heatmap"><i></i><i></i><i class="l1"></i><i class="l2"></i><i></i><i class="l3"></i><i class="l4"></i><i class="l2"></i><i class="l1"></i><i></i><i class="l2"></i><i class="l3"></i><i class="l3"></i><i class="l4"></i><i class="l2"></i><i class="l1"></i><i class="l3"></i><i></i><i class="l4"></i><i class="l4"></i><i class="l2"></i><i class="l3"></i><i class="l1"></i><i></i><i class="l2"></i><i class="l4"></i><i class="l3"></i><i class="l1"></i></div></article>
         </div>
       </section>
 
@@ -64,7 +64,7 @@
         <div class="feature-grid">
           <article class="purple"><span>SMART SUGGESTIONS</span><h3>Know the next useful move.</h3><p>Hubris finds activities at risk and suggests a focused action based on what your week actually needs.</p><div class="suggestion"><i>✦</i><div><b>Your health score needs love</b><small>A short walk keeps your weekly goal alive.</small></div><span>Plan →</span></div></article>
           <article><span>PLANS + GOALS</span><h3>Connect today to something larger.</h3><p>Schedule concrete plans, complete them in place, and keep longer-term goals tied to the activities that move them.</p><div class="timeline"><i></i><span><b>Today</b><small>3 plans</small></span><span><b>This week</b><small>18 activities</small></span><span><b>Goal</b><small>Run 100 km</small></span></div></article>
-          <article><span>ENTERTAINMENT</span><h3>Track taste without mixing it with habits.</h3><p>A dedicated catalog separates movies, TV, anime, manga, and books from productivity scoring.</p><div class="posters"><i>FILM</i><i>BOOK</i><i>ANIME</i></div></article>
+          <article><span>ENTERTAINMENT</span><h3>Track taste without mixing it with habits.</h3><p>A dedicated catalog separates movies, TV, anime, manga, and books from productivity scoring.</p><div class="posters" role="img" aria-label="Example film, book and anime posters"><i>FILM</i><i>BOOK</i><i>ANIME</i></div></article>
         </div>
       </section>
 
@@ -75,6 +75,6 @@
 
       <section class="cta"><p class="eyebrow"><span></span> Open source · In development</p><h2>Pay attention to what you become.</h2><a class="button light" href="https://github.com/bananatruck/Hubris">View Hubris on GitHub <span>↗</span></a></section>
     </main>
-    <footer><a class="brand" href="#top"><span class="mark">H</span><span>Hubris</span></a><p>Track everything that matters.</p><a href="https://github.com/bananatruck/Hubris">Source ↗</a></footer>
+    <footer><a class="brand" href="#top"><span class="mark" aria-hidden="true">H</span><span>Hubris</span></a><p>Track everything that matters.</p><a href="https://github.com/bananatruck/Hubris">Source ↗</a></footer>
   </body>
 </html>

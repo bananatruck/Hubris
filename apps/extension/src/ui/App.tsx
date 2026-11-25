@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertCircle, BarChart3, CalendarCheck2, Clock, PanelRightOpen, RotateCcw, Settings } from 'lucide-react';
 import type { LogUndo } from '../storage/repository';
 import { useHubris } from '../state/useHubris';
@@ -47,11 +47,21 @@ function LoadingSkeleton() {
   );
 }
 
+/**
+ * Focus rule after a keyboard user dismisses the last toast: the active tab panel when the tabs show,
+ * otherwise the main region of the current view (onboarding, loading or error). The toast stack moves
+ * focus to a remaining toast first; see Toast.
+ */
+function focusAfterLastToast(main: HTMLElement | null) {
+  return document.querySelector<HTMLElement>('[role="tabpanel"][data-state="active"]') ?? main;
+}
+
 export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
   const { status, error, report, onboardingComplete, actions } = useHubris();
   const [activeTab, setActiveTab] = useState<TabValue>('today');
   const [keepOnboardingForStep3, setKeepOnboardingForStep3] = useState(false);
   const [toasts, setToasts] = useState<ToastData[]>([]);
+  const mainRef = useRef<HTMLElement>(null);
   const [windowId, setWindowId] = useState<number | null>(null);
 
   const canShowSidePanelButton =
@@ -190,11 +200,11 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
         )}
 
         {status === 'loading' ? (
-          <main className="flex-1">
+          <main ref={mainRef} tabIndex={-1} className="outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-soft flex-1">
             <LoadingSkeleton />
           </main>
         ) : status === 'error' ? (
-          <main className="flex flex-1 items-center justify-center p-4">
+          <main ref={mainRef} tabIndex={-1} className="outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-soft flex flex-1 items-center justify-center p-4">
             <SpotlightCard className="w-full max-w-sm p-5 text-center space-y-3">
               <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-red-950 text-red-300 border border-red-500/40">
                 <AlertCircle className="h-5 w-5" aria-hidden="true" />
@@ -214,7 +224,7 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
             </SpotlightCard>
           </main>
         ) : showOnboarding ? (
-          <main className="flex-1 overflow-y-auto">
+          <main ref={mainRef} tabIndex={-1} className="outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-soft flex-1 overflow-y-auto">
             <OnboardingScreen
               onEnterStep3={() => setKeepOnboardingForStep3(true)}
               onFinish={() => setKeepOnboardingForStep3(false)}
@@ -226,7 +236,7 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
             onValueChange={(val) => setActiveTab(val as TabValue)}
             className="flex flex-1 flex-col min-h-0"
           >
-            <main className="flex-1 overflow-y-auto px-3.5 py-3 pb-20">
+            <main ref={mainRef} tabIndex={-1} className="outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-soft flex-1 overflow-y-auto px-3.5 py-3 pb-20">
               <TabsContent value="today" className="rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:ring-offset-2 focus-visible:ring-offset-ink">
                 <div className={twoColumnClass}>
                   <TodayScreen onLogged={handleLogged} />
@@ -264,7 +274,7 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
             </nav>
           </TabsRoot>
         )}
-        <Toast toasts={toasts} onDismiss={dismissToast} durationMs={6000} />
+        <Toast toasts={toasts} onDismiss={dismissToast} durationMs={6000} fallbackFocus={() => focusAfterLastToast(mainRef.current)} />
       </div>
     </NotificationContext.Provider>
   );

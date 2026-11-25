@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -15,16 +15,19 @@ import { colors, spacing, borderRadius, shadows } from '../../src/theme';
 import { useActivities } from '../../src/hooks/useActivities';
 import { useCategoryStats } from '../../src/hooks/useStats';
 import { entertainmentService, EntertainmentItem } from '../../src/services/entertainment';
-
-function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
-    let timeout: NodeJS.Timeout;
-    return (...args: Parameters<T>) => {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => func(...args), wait);
-    };
-}
+import { createSearchController, EMPTY_SEARCH, type SearchState } from '../../src/services/search-controller';
 
 type SubCategory = 'movie' | 'tv' | 'anime' | 'manga' | 'book';
+
+function searchCategory(category: SubCategory, query: string): Promise<EntertainmentItem[]> {
+    switch (category) {
+        case 'movie': return entertainmentService.searchMovies(query);
+        case 'tv': return entertainmentService.searchTV(query);
+        case 'anime': return entertainmentService.searchAnime(query);
+        case 'manga': return entertainmentService.searchManga(query);
+        case 'book': return entertainmentService.searchBooks(query);
+    }
+}
 
 const SUB_CATEGORIES: { id: SubCategory; label: string; icon: string }[] = [
     { id: 'movie', label: 'Movies', icon: '🎬' },
@@ -40,39 +43,13 @@ export default function EntertainmentScreen() {
 
     const [activeTab, setActiveTab] = useState<SubCategory>('movie');
     const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState<EntertainmentItem[]>([]);
-    const [isSearching, setIsSearching] = useState(false);
+    const [search, setSearch] = useState<SearchState<EntertainmentItem>>(EMPTY_SEARCH);
+    // Only the latest search owns the results: see createSearchController.
+    const [controller] = useState(() => createSearchController(searchCategory, setSearch));
+    useEffect(() => () => controller.dispose(), [controller]);
 
     // Filter activities by sub-category
     const filteredActivities = activities.filter(a => a.sub_category === activeTab);
-
-    const handleSearch = async (query: string) => {
-        setSearchQuery(query);
-        if (!query.trim()) {
-            setSearchResults([]);
-            return;
-        }
-
-        setIsSearching(true);
-        try {
-            let results: EntertainmentItem[] = [];
-            switch (activeTab) {
-                case 'movie': results = await entertainmentService.searchMovies(query); break;
-                case 'tv': results = await entertainmentService.searchTV(query); break;
-                case 'anime': results = await entertainmentService.searchAnime(query); break;
-                case 'manga': results = await entertainmentService.searchManga(query); break;
-                case 'book': results = await entertainmentService.searchBooks(query); break;
-            }
-            setSearchResults(results);
-        } catch (error) {
-            console.error('Search error:', error);
-        } finally {
-            setIsSearching(false);
-        }
-    };
-
-    // Debounce search to avoid too many API calls
-    const debouncedSearch = useCallback(debounce(handleSearch, 500), [activeTab]);
 
     return (
         <SafeAreaView style={styles.container}>
@@ -101,7 +78,7 @@ export default function EntertainmentScreen() {
                         onPress={() => {
                             setActiveTab(tab.id);
                             setSearchQuery('');
-                            setSearchResults([]);
+                            controller.reset();
                         }}
                     >
                         <Text style={[styles.tabText, activeTab === tab.id && styles.activeTabText]}>
@@ -121,20 +98,26 @@ export default function EntertainmentScreen() {
                         value={searchQuery}
                         onChangeText={(text) => {
                             setSearchQuery(text);
-                            debouncedSearch(text);
+                            controller.type(activeTab, text);
                         }}
                     />
-                    {isSearching && (
+                    {search.searching && (
                         <ActivityIndicator style={styles.searchLoader} color={colors.primary.main} />
                     )}
                 </View>
 
+                {search.error && (
+                    <Text style={styles.searchError} accessibilityRole="alert">
+                        {search.error}
+                    </Text>
+                )}
+
                 {/* Search Results */}
-                {searchResults.length > 0 && (
+                {search.results.length > 0 && (
                     <View style={styles.resultsList}>
                         <Text style={styles.sectionTitle}>Search Results</Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.resultsScroll}>
-                            {searchResults.map((item) => (
+                            {search.results.map((item) => (
                                 <Pressable
                                     key={item.id}
                                     style={styles.resultCard}
@@ -299,6 +282,11 @@ const styles = StyleSheet.create({
         position: 'absolute',
         right: spacing.md,
         top: spacing.md,
+    },
+    searchError: {
+        color: colors.status.error,
+        fontSize: 14,
+        marginBottom: spacing.md,
     },
     section: {
         marginBottom: spacing.lg,

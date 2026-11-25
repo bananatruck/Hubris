@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { computeWeeklyReport, computeWeeklyTrend, generateLogHeatmap, getWeekBounds } from '@hubris/core';
+import { computeWeeklyReport, computeWeeklyTrend, generateLogHeatmap, generateWeeklySuggestions, getWeekBounds } from '@hubris/core';
 import { HubrisContext, type HubrisState } from '../../state/useHubris';
 import { ValidationError } from '../../storage/validation';
 import { App } from '../App';
@@ -478,4 +478,72 @@ it('does not close a reopened edit dialog for the same activity when an older sa
 
   expect(screen.getByRole('dialog', { name: 'Edit activity' })).toBeTruthy();
   expect(screen.getByLabelText('Activity name')).toHaveValue('Practice draft');
+});
+
+it('suggests an activity that is active now even when a later version archives it', () => {
+  const versions = [
+    { from: '2026-11-01T00:00:00.000Z', category: 'health' as const, timesPerWeek: 7, importance: 'high' as const, archived: false },
+    { from: '2026-12-01T00:00:00.000Z', category: 'health' as const, timesPerWeek: 7, importance: 'high' as const, archived: true },
+  ];
+  const meditation = { ...activity, id: 'm', name: 'Meditation', category: 'health' as const, timesPerWeek: 7, archived: true, versions };
+  setup({
+    activities: [meditation],
+    logs: [],
+    report: computeWeeklyReport([meditation], [], now),
+    suggestions: generateWeeklySuggestions([meditation], [], now),
+  });
+  const region = screen.getByRole('region', { name: 'Worth doing next' });
+  expect(within(region).getByRole('button', { name: 'Log Meditation' })).toBeTruthy();
+});
+
+it('returns keyboard focus to the open tab panel when the last toast is undone', async () => {
+  setup();
+  fireEvent.click(screen.getByRole('button', { name: /Log Practice/ }));
+  const undo = await screen.findByRole('button', { name: 'Undo Practice' });
+  undo.focus();
+  fireEvent.click(undo);
+  expect(document.activeElement).toBe(screen.getByRole('tabpanel', { name: 'Today' }));
+});
+
+it.each(['Today', 'Settings'])('does not close a newer add dialog on %s when an older save completes', async (tab) => {
+  let resolveCreate: (value: HubrisState['activities'][number]) => void = () => {};
+  const createActivity = vi.fn<HubrisState['actions']['createActivity']>(() => new Promise((resolve) => {
+    resolveCreate = resolve;
+  }));
+  setup({}, { createActivity });
+  fireEvent.click(screen.getByRole('tab', { name: tab }));
+  fireEvent.click(screen.getByRole('button', { name: /Add activity/ }));
+  fireEvent.change(screen.getByLabelText('Activity name'), { target: { value: 'First draft' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save activity' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+  fireEvent.click(screen.getByRole('button', { name: /Add activity/ }));
+  fireEvent.change(screen.getByLabelText('Activity name'), { target: { value: 'Second draft' } });
+  resolveCreate(activity);
+
+  await waitFor(() => expect(createActivity).toHaveBeenCalledTimes(1));
+  await act(async () => {});
+  expect(screen.getByRole('dialog', { name: 'Add activity' })).toBeTruthy();
+  expect(screen.getByLabelText('Activity name')).toHaveValue('Second draft');
+});
+
+/**
+ * Focus rule after a keyboard user dismisses the last toast: the active tab panel when the tabs
+ * show, otherwise the main region of the current view (onboarding, loading or error).
+ */
+it.each<[string, Partial<HubrisState>, () => HTMLElement]>([
+  ['tabs', {}, () => screen.getByRole('tabpanel', { name: 'Today' })],
+  ['onboarding', { onboardingComplete: false }, () => screen.getByRole('main')],
+  ['loading', { status: 'loading' }, () => screen.getByRole('main')],
+  ['error', { status: 'error', error: 'Could not read local data.' }, () => screen.getByRole('main')],
+])('moves focus to the %s view when its last toast is dismissed', async (_view, overrides, target) => {
+  const open = vi.fn(() => Promise.reject(new Error('Panel unavailable.')));
+  vi.stubGlobal('chrome', { windows: { getCurrent: (callback: (win: { id: number }) => void) => callback({ id: 7 }) }, sidePanel: { open } });
+  setup(overrides);
+  fireEvent.click(screen.getByRole('button', { name: 'Open side panel' }));
+  const dismiss = await screen.findByRole('button', { name: 'Dismiss Panel unavailable.' });
+  dismiss.focus();
+  fireEvent.click(dismiss);
+  expect(document.activeElement).toBe(target());
 });

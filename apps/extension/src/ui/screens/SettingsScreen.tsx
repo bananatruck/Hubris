@@ -7,6 +7,7 @@ import { useNotify } from '../lib/notify';
 import { useDialogAction } from '../lib/useDialogAction';
 import { CATEGORY_BY_ID, IMPORTANCE_BY_ID } from '../lib/categories';
 import { ActivityForm } from '../components/ActivityForm';
+import { useDialogSession } from '../lib/useDialogSession';
 import { Button } from '../components/21st/button';
 import { Dialog, DialogContent } from '../components/21st/dialog';
 import { Input } from '../components/21st/input';
@@ -30,7 +31,7 @@ export function SettingsScreen() {
 
   const { activities, actions } = useHubris();
 
-  const [addOpen, setAddOpen] = useState(false);
+  const addSession = useDialogSession();
   // Each open of the edit dialog is a new session, so a slow save from an earlier
   // session (even for the same activity) cannot close a newer draft.
   const editSessions = useRef(0);
@@ -114,7 +115,7 @@ export function SettingsScreen() {
           <h2 className="font-display text-base font-semibold text-text">
             Manage activities
           </h2>
-          <Button ref={addButton} variant="secondary" size="sm" onClick={() => setAddOpen(true)}>
+          <Button ref={addButton} variant="secondary" size="sm" onClick={addSession.open}>
             <Plus className="h-3.5 w-3.5" aria-hidden="true" />
             Add activity
           </Button>
@@ -242,14 +243,7 @@ export function SettingsScreen() {
             />
 
             <div className="space-y-2">
-              <label
-                htmlFor={fileInputId}
-                aria-disabled={importing || undefined}
-                className={`flex items-center justify-center gap-2 rounded-lg border border-dashed border-line bg-raised/60 px-3 py-2 text-xs font-medium text-text ${importing ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-raised'}`}
-              >
-                <Upload className="h-3.5 w-3.5 text-accent-soft" aria-hidden="true" />
-                <span>{selectedFile ? selectedFile.name : 'Choose backup JSON file'}</span>
-              </label>
+              {/* The input comes first so the visible label can follow its keyboard focus with peer-focus-visible. */}
               <input
                 ref={fileInput}
                 id={fileInputId}
@@ -258,8 +252,16 @@ export function SettingsScreen() {
                 accept=".json,application/json"
                 disabled={importing}
                 onChange={handleFileChange}
-                className="sr-only"
+                className="peer sr-only"
               />
+              <label
+                htmlFor={fileInputId}
+                aria-disabled={importing || undefined}
+                className={`flex items-center justify-center gap-2 rounded-lg border border-dashed border-line bg-raised/60 px-3 py-2 text-xs font-medium text-text peer-focus-visible:ring-2 peer-focus-visible:ring-accent-soft ${importing ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-raised'}`}
+              >
+                <Upload className="h-3.5 w-3.5 text-accent-soft" aria-hidden="true" />
+                <span>{selectedFile ? selectedFile.name : 'Choose backup JSON file'}</span>
+              </label>
             </div>
 
             {selectedFile && (
@@ -350,7 +352,7 @@ export function SettingsScreen() {
         </SpotlightCard>
       </section>
 
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+      <Dialog open={addSession.isOpen} onOpenChange={addSession.onOpenChange}>
         <DialogContent
           returnFocusFallback={() => addButton.current}
           title="Add activity"
@@ -358,9 +360,9 @@ export function SettingsScreen() {
         >
           <ActivityForm
             submitLabel="Save activity"
-            onCancel={() => setAddOpen(false)}
+            onCancel={() => addSession.close()}
             onSubmit={actions.createActivity}
-            onSuccess={() => setAddOpen(false)}
+            onSuccess={addSession.closeThisSession}
           />
         </DialogContent>
       </Dialog>

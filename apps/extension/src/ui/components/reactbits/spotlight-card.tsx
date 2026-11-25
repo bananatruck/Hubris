@@ -12,6 +12,7 @@ export function SpotlightCard({
   children,
   spotlightColor = 'rgba(167, 139, 250, 0.12)',
   className,
+  style,
   ...props
 }: SpotlightCardProps) {
   const prefersReducedMotion = useReducedMotion();
@@ -26,6 +27,12 @@ export function SpotlightCard({
     });
   };
 
+  // The spotlight is a background image, painted under the content, so children stay direct children
+  // of the card and the caller's space-y-* and divide-y utilities keep working.
+  const spotlight = position && !prefersReducedMotion
+    ? `radial-gradient(260px circle at ${position.x}px ${position.y}px, ${spotlightColor}, transparent 80%)`
+    : undefined;
+
   return (
     <div
       onMouseMove={handleMouseMove}
@@ -34,18 +41,10 @@ export function SpotlightCard({
         'relative overflow-hidden rounded-xl border border-line bg-panel',
         className,
       )}
+      style={spotlight ? { ...style, backgroundImage: spotlight } : style}
       {...props}
     >
-      {position && !prefersReducedMotion && (
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background: `radial-gradient(260px circle at ${position.x}px ${position.y}px, ${spotlightColor}, transparent 80%)`,
-          }}
-        />
-      )}
-      <div className="relative z-10">{children}</div>
+      {children}
     </div>
   );
 }

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import type { ActivityScoreRow, ScoredCategory } from '@hubris/types';
 import { useHubris } from '../../state/useHubris';
@@ -6,6 +5,7 @@ import { type ActivityLoggedHandler, useActivityLogger } from '../lib/useActivit
 import { CATEGORIES, CATEGORY_BY_ID, IMPORTANCE_BY_ID } from '../lib/categories';
 import { getRoundedStatus } from '../lib/format';
 import { ActivityForm } from '../components/ActivityForm';
+import { useDialogSession } from '../lib/useDialogSession';
 import { SuggestionList } from '../components/SuggestionList';
 import { Button } from '../components/21st/button';
 import { Dialog, DialogContent, DialogTrigger } from '../components/21st/dialog';
@@ -74,7 +74,7 @@ function GoalDots({ row, color }: { row: ActivityScoreRow; color: string }) {
 export function TodayScreen({ onLogged }: TodayScreenProps) {
   const { report, actions } = useHubris();
   const { logActivity, pendingIds } = useActivityLogger(onLogged);
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const addSession = useDialogSession();
 
   const { rounded: roundedOverall, word: statusWord } = getRoundedStatus(report.overall);
 
@@ -170,7 +170,7 @@ export function TodayScreen({ onLogged }: TodayScreenProps) {
           <h2 className="font-display text-base font-semibold text-text">
             This week
           </h2>
-          <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+          <Dialog open={addSession.isOpen} onOpenChange={addSession.onOpenChange}>
             <DialogTrigger asChild>
               <Button variant="secondary" size="sm">
                 <Plus className="h-3.5 w-3.5" aria-hidden="true" />
@@ -183,9 +183,9 @@ export function TodayScreen({ onLogged }: TodayScreenProps) {
             >
               <ActivityForm
                 submitLabel="Save activity"
-                onCancel={() => setAddDialogOpen(false)}
+                onCancel={() => addSession.close()}
                 onSubmit={actions.createActivity}
-                onSuccess={() => setAddDialogOpen(false)}
+                onSuccess={addSession.closeThisSession}
               />
             </DialogContent>
           </Dialog>
@@ -201,7 +201,7 @@ export function TodayScreen({ onLogged }: TodayScreenProps) {
                 Add your first weekly habit across Career, Health, or Hobbies to start tracking this week.
               </p>
             </div>
-            <Button variant="primary" onClick={() => setAddDialogOpen(true)}>
+            <Button variant="primary" onClick={addSession.open}>
               <Plus className="h-3.5 w-3.5" aria-hidden="true" />
               Add your first activity
             </Button>

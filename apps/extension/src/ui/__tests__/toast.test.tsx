@@ -20,6 +20,53 @@ describe('Toast live region', () => {
   });
 });
 
+/**
+ * Live region rule: the status region announces the toasts that arrived in an update (ids it has not
+ * seen in the previous update), once, in arrival order, each as its own line. An update with no
+ * arrivals (a dismissal or expiry) leaves the region unchanged, so nothing is re-read. When the stack
+ * empties, the region empties. Every batch of arrivals is a new node, so a repeated message is a new
+ * announcement. The status region is the only live source: nothing in the visible stack has live
+ * semantics, so each message, error detail included, is announced once, by one region.
+ */
+describe('Toast announcements', () => {
+  const t = (id: string, message: string): ToastData => ({ id, message });
+  const lines = (region: HTMLElement) => [...region.querySelectorAll('p')].map((line) => line.textContent);
+  it.each<[string, ToastData[], ToastData[], string[] | 'unchanged']>([
+    ['two arriving together are both announced in order', [], [t('a', 'Alpha'), t('b', 'Beta')], ['Alpha', 'Beta']],
+    ['only the new ones of a larger stack', [t('a', 'Alpha')], [t('a', 'Alpha'), t('b', 'Beta'), t('c', 'Gamma')], ['Beta', 'Gamma']],
+    ['a repeated message arrives as a new announcement', [t('a', 'Alpha')], [t('a', 'Alpha'), t('a2', 'Alpha')], ['Alpha']],
+    ['one leaving while another arrives announces the arrival', [t('a', 'Alpha')], [t('c', 'Gamma')], ['Gamma']],
+    ['dismissing the newest re-reads nothing', [t('a', 'Alpha'), t('b', 'Beta')], [t('a', 'Alpha')], 'unchanged'],
+    ['an emptied stack empties the region', [t('a', 'Alpha')], [], []],
+  ])('%s', (_name, before, after, expected) => {
+    const { rerender } = render(<Toast toasts={before} onDismiss={vi.fn()} />);
+    const region = screen.getByRole('status');
+    const previous = region.firstElementChild;
+    const previousLines = lines(region);
+    rerender(<Toast toasts={after} onDismiss={vi.fn()} />);
+    expect(screen.getByRole('status')).toBe(region);
+    if (expected === 'unchanged') {
+      expect(region.firstElementChild).toBe(previous);
+      expect(lines(region)).toEqual(previousLines);
+    } else {
+      expect(lines(region)).toEqual(expected);
+      if (expected.length) expect(region.firstElementChild).not.toBe(previous);
+    }
+  });
+
+  it.each<[string, ToastData[]]>([
+    ['an info toast', [{ id: 'i', message: 'Alpha logged', undoLabel: 'Undo Alpha', onUndo: vi.fn() }]],
+    ['an error toast', [{ id: 'e', tone: 'error', message: 'Could not undo.' }]],
+    ['a toast with an error detail', [{ id: 'd', message: 'Could not save.', errorMessage: 'Storage is full.' }]],
+  ])('announces %s through the status region only', (_name, toasts) => {
+    const { container } = render(<Toast toasts={toasts} onDismiss={vi.fn()} />);
+    const live = container.querySelectorAll('[role="alert"], [role="status"], [role="log"], [aria-live]');
+    expect([...live]).toEqual([screen.getByRole('status')]);
+    const [toast] = toasts;
+    expect(lines(screen.getByRole('status'))).toEqual([[toast.message, toast.errorMessage].filter(Boolean).join(' ')]);
+  });
+});
+
 it('styles error notifications red and never offers Undo', () => {
   const { container } = render(<Toast toasts={[{ id: 'error', tone: 'error', message: 'Storage is full.' }]} onDismiss={vi.fn()} />);
   expect(container.querySelector('.border-red-500\\/60')).toBeTruthy();
@@ -100,4 +147,39 @@ it('expires an older toast on its own timer while a newer toast stays', () => {
   expect(onDismiss).toHaveBeenCalledTimes(1);
   expect(onDismiss).toHaveBeenCalledWith('a');
   expect(onDismiss).not.toHaveBeenCalledWith('b');
+});
+
+/**
+ * Focus rule: when Undo or Dismiss removes the toast that holds focus, focus moves to the toast now in
+ * its place (the next newer one), else the one before it, else the caller's fallback. Focus outside the
+ * dismissed toast is never moved.
+ */
+describe('Toast focus on dismissal', () => {
+  function Harness({ initial }: { initial: ToastData[] }) {
+    const [toasts, setToasts] = useState(initial);
+    return <>
+      <button type="button">Outside</button>
+      <div tabIndex={-1} data-testid="fallback">Panel</div>
+      <Toast
+        toasts={toasts}
+        onDismiss={(id) => setToasts((current) => current.filter((toast) => toast.id !== id))}
+        fallbackFocus={() => screen.getByTestId('fallback')}
+      />
+    </>;
+  }
+  const make = (...names: string[]): ToastData[] =>
+    names.map((name) => ({ id: name, message: `${name} logged`, undoLabel: `Undo ${name}`, onUndo: vi.fn() }));
+
+  it.each<[string, string[], string, string | null, () => HTMLElement]>([
+    ['the middle one moves focus to the next newer', ['Alpha', 'Beta', 'Gamma'], 'Dismiss Beta logged', 'Dismiss Beta logged', () => screen.getByRole('button', { name: 'Undo Gamma' })],
+    ['the newest moves focus to the one before it', ['Alpha', 'Beta', 'Gamma'], 'Undo Gamma', 'Undo Gamma', () => screen.getByRole('button', { name: 'Undo Beta' })],
+    ['the oldest moves focus to the next newer', ['Alpha', 'Beta'], 'Undo Alpha', 'Undo Alpha', () => screen.getByRole('button', { name: 'Undo Beta' })],
+    ['the last one moves focus to the fallback', ['Alpha'], 'Undo Alpha', 'Undo Alpha', () => screen.getByTestId('fallback')],
+    ['any one leaves focus outside the stack alone', ['Alpha', 'Beta'], 'Dismiss Beta logged', 'Outside', () => screen.getByRole('button', { name: 'Outside' })],
+  ])('dismissing %s', (_name, names, press, focused, expected) => {
+    render(<Harness initial={make(...names)} />);
+    if (focused) screen.getByRole('button', { name: focused }).focus();
+    fireEvent.click(screen.getByRole('button', { name: press }));
+    expect(document.activeElement).toBe(expected());
+  });
 });

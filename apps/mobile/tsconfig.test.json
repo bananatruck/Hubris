@@ -1,0 +1,12 @@
+{
+  // The *.test.ts files run under Node's own test runner, not React Native, so they and the
+  // modules they import are checked against Node's types. Node needs the .ts extension on imports.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "lib": ["ES2022"],
+    "types": ["node"]
+  },
+  "include": ["src/**/*.test.ts"]
+}
