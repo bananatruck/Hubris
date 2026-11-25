@@ -306,6 +306,26 @@ try {
     await popup.getByRole('button', { name: 'Undo Meditation', exact: true }).waitFor({ state: 'visible' });
     await streak.waitFor({ state: 'hidden' });
   });
+
+  await step(10, 'keyboard focus is visible on the backup file chooser', async () => {
+    await selectTab(popup, 'Settings');
+    const input = popup.getByLabel('Import backup file', { exact: true });
+    const labelShadow = () => popup.evaluate(() => {
+      const field = document.querySelector('input[type="file"]');
+      return getComputedStyle(document.querySelector(`label[for="${CSS.escape(field.id)}"]`)).boxShadow;
+    });
+    const unfocused = await labelShadow();
+    await popup.getByRole('tab', { name: 'Settings', exact: true }).focus();
+    let reachedInput = false;
+    for (let presses = 0; presses < 80 && !reachedInput; presses += 1) {
+      await popup.keyboard.press('Shift+Tab');
+      reachedInput = await input.evaluate((element) => element === document.activeElement);
+    }
+    assert(reachedInput, 'Keyboard focus never reached the backup file input');
+    const focused = await labelShadow();
+    assert.notEqual(focused, 'none', 'The backup file label shows no focus ring');
+    assert.notEqual(focused, unfocused, 'The backup file label looks the same with and without focus');
+  });
 } catch (error) {
   failed = true;
   console.error(`FAIL Setup: ${error.stack ?? error.message}`);

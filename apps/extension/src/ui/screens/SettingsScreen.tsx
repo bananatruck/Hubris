@@ -242,14 +242,7 @@ export function SettingsScreen() {
             />
 
             <div className="space-y-2">
-              <label
-                htmlFor={fileInputId}
-                aria-disabled={importing || undefined}
-                className={`flex items-center justify-center gap-2 rounded-lg border border-dashed border-line bg-raised/60 px-3 py-2 text-xs font-medium text-text ${importing ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-raised'}`}
-              >
-                <Upload className="h-3.5 w-3.5 text-accent-soft" aria-hidden="true" />
-                <span>{selectedFile ? selectedFile.name : 'Choose backup JSON file'}</span>
-              </label>
+              {/* The input comes first so the visible label can follow its keyboard focus with peer-focus-visible. */}
               <input
                 ref={fileInput}
                 id={fileInputId}
@@ -258,8 +251,16 @@ export function SettingsScreen() {
                 accept=".json,application/json"
                 disabled={importing}
                 onChange={handleFileChange}
-                className="sr-only"
+                className="peer sr-only"
               />
+              <label
+                htmlFor={fileInputId}
+                aria-disabled={importing || undefined}
+                className={`flex items-center justify-center gap-2 rounded-lg border border-dashed border-line bg-raised/60 px-3 py-2 text-xs font-medium text-text peer-focus-visible:ring-2 peer-focus-visible:ring-accent-soft ${importing ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-raised'}`}
+              >
+                <Upload className="h-3.5 w-3.5 text-accent-soft" aria-hidden="true" />
+                <span>{selectedFile ? selectedFile.name : 'Choose backup JSON file'}</span>
+              </label>
             </div>
 
             {selectedFile && (
