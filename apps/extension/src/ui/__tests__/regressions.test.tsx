@@ -504,3 +504,26 @@ it('returns keyboard focus to the open tab panel when the last toast is undone',
   fireEvent.click(undo);
   expect(document.activeElement).toBe(screen.getByRole('tabpanel', { name: 'Today' }));
 });
+
+it.each(['Today', 'Settings'])('does not close a newer add dialog on %s when an older save completes', async (tab) => {
+  let resolveCreate: (value: HubrisState['activities'][number]) => void = () => {};
+  const createActivity = vi.fn<HubrisState['actions']['createActivity']>(() => new Promise((resolve) => {
+    resolveCreate = resolve;
+  }));
+  setup({}, { createActivity });
+  fireEvent.click(screen.getByRole('tab', { name: tab }));
+  fireEvent.click(screen.getByRole('button', { name: /Add activity/ }));
+  fireEvent.change(screen.getByLabelText('Activity name'), { target: { value: 'First draft' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save activity' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+  fireEvent.click(screen.getByRole('button', { name: /Add activity/ }));
+  fireEvent.change(screen.getByLabelText('Activity name'), { target: { value: 'Second draft' } });
+  resolveCreate(activity);
+
+  await waitFor(() => expect(createActivity).toHaveBeenCalledTimes(1));
+  await act(async () => {});
+  expect(screen.getByRole('dialog', { name: 'Add activity' })).toBeTruthy();
+  expect(screen.getByLabelText('Activity name')).toHaveValue('Second draft');
+});
