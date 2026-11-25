@@ -326,6 +326,26 @@ try {
     assert.notEqual(focused, 'none', 'The backup file label shows no focus ring');
     assert.notEqual(focused, unfocused, 'The backup file label looks the same with and without focus');
   });
+
+  await step(11, 'cards keep their spacing, dividers and spotlight', async () => {
+    await selectTab(popup, 'Settings');
+    const layout = await popup.evaluate(() => {
+      const panel = document.querySelector('[role="tabpanel"][data-state="active"]');
+      const first = (selector) => [...panel.querySelectorAll(selector)].find((card) => card.children.length > 1);
+      const divided = first('.rounded-xl.divide-y');
+      const spaced = first('.rounded-xl[class*="space-y-"]');
+      return {
+        divider: divided && getComputedStyle(divided.children[0]).borderBottomWidth,
+        spacing: spaced && getComputedStyle(spaced.children[0]).marginBottom,
+      };
+    });
+    assert(layout.divider && layout.divider !== '0px', `Activity rows lost their divider: ${layout.divider}`);
+    assert(layout.spacing && layout.spacing !== '0px', `Card blocks lost their spacing: ${layout.spacing}`);
+    const card = popup.locator('[role="tabpanel"][data-state="active"] .rounded-xl.divide-y').first();
+    await card.hover();
+    const background = await card.evaluate((element) => getComputedStyle(element).backgroundImage);
+    assert(background.includes('radial-gradient'), `No spotlight under the pointer: ${background}`);
+  });
 } catch (error) {
   failed = true;
   console.error(`FAIL Setup: ${error.stack ?? error.message}`);
