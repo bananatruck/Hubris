@@ -495,3 +495,12 @@ it('suggests an activity that is active now even when a later version archives i
   const region = screen.getByRole('region', { name: 'Worth doing next' });
   expect(within(region).getByRole('button', { name: 'Log Meditation' })).toBeTruthy();
 });
+
+it('returns keyboard focus to the open tab panel when the last toast is undone', async () => {
+  setup();
+  fireEvent.click(screen.getByRole('button', { name: /Log Practice/ }));
+  const undo = await screen.findByRole('button', { name: 'Undo Practice' });
+  undo.focus();
+  fireEvent.click(undo);
+  expect(document.activeElement).toBe(screen.getByRole('tabpanel', { name: 'Today' }));
+});

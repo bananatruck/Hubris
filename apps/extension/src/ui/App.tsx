@@ -47,6 +47,10 @@ function LoadingSkeleton() {
   );
 }
 
+function activeTabPanel() {
+  return document.querySelector<HTMLElement>('[role="tabpanel"][data-state="active"]');
+}
+
 export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
   const { status, error, report, onboardingComplete, actions } = useHubris();
   const [activeTab, setActiveTab] = useState<TabValue>('today');
@@ -264,7 +268,7 @@ export function App({ surface }: { surface: 'popup' | 'sidepanel' }) {
             </nav>
           </TabsRoot>
         )}
-        <Toast toasts={toasts} onDismiss={dismissToast} durationMs={6000} />
+        <Toast toasts={toasts} onDismiss={dismissToast} durationMs={6000} fallbackFocus={activeTabPanel} />
       </div>
     </NotificationContext.Provider>
   );

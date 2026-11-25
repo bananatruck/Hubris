@@ -1,5 +1,5 @@
 // 21st.dev - https://21st.dev/shadcn/toast
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/cn';
 
@@ -17,6 +17,8 @@ export interface ToastProps {
   onDismiss: (id: string) => void;
   durationMs?: number;
   className?: string;
+  /** Where focus goes when a keyboard user dismisses the last toast. */
+  fallbackFocus?: () => HTMLElement | null;
 }
 
 export function Toast({
@@ -24,7 +26,27 @@ export function Toast({
   onDismiss,
   durationMs = 6000,
   className,
+  fallbackFocus,
 }: ToastProps) {
+  const stackRef = useRef<HTMLDivElement>(null);
+  // Set when a click inside a focused toast removes it. Focus then moves to the toast that takes its place,
+  // the one before it, or the fallback, instead of dropping to the document.
+  const focusAfterDismiss = useRef<number | null>(null);
+  const dismissFromToast = useCallback((id: string, hadFocus: boolean) => {
+    if (hadFocus) focusAfterDismiss.current = toasts.findIndex((toast) => toast.id === id);
+    onDismiss(id);
+  }, [onDismiss, toasts]);
+
+  useLayoutEffect(() => {
+    const index = focusAfterDismiss.current;
+    if (index === null) return;
+    focusAfterDismiss.current = null;
+    const cards = stackRef.current?.querySelectorAll<HTMLElement>('[data-toast]') ?? [];
+    const card = cards[index] ?? cards[index - 1];
+    const target = card?.querySelector<HTMLElement>('button') ?? fallbackFocus?.();
+    target?.focus();
+  }, [toasts, fallbackFocus]);
+
   // Each notification is announced once, when it arrives. A keyed node per notification makes a repeated
   // message a new update, and dismissing the newest toast leaves the region alone instead of re-reading an older one.
   const [knownIds, setKnownIds] = useState<readonly string[]>([]);
@@ -42,12 +64,13 @@ export function Toast({
       <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {announcement && <span key={announcement.id}>{announcement.text}</span>}
       </div>
-      <div className="fixed bottom-16 left-3 right-3 z-50 mx-auto flex max-h-[calc(100dvh-5rem)] max-w-[356px] flex-col gap-2 overflow-y-auto">
+      <div ref={stackRef} className="fixed bottom-16 left-3 right-3 z-50 mx-auto flex max-h-[calc(100dvh-5rem)] max-w-[356px] flex-col gap-2 overflow-y-auto">
         {toasts.map((toast) => (
           <ToastMessage
             key={toast.id}
             toast={toast}
             onDismiss={onDismiss}
+            onDismissFromToast={dismissFromToast}
             durationMs={durationMs}
             className={className}
           />
@@ -60,11 +83,14 @@ export function Toast({
 interface ToastMessageProps {
   toast: ToastData;
   onDismiss: (id: string) => void;
+  onDismissFromToast: (id: string, hadFocus: boolean) => void;
   durationMs: number;
   className?: string;
 }
 
-function ToastMessage({ toast, onDismiss, durationMs, className }: ToastMessageProps) {
+function ToastMessage({ toast, onDismiss, onDismissFromToast, durationMs, className }: ToastMessageProps) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const hasFocus = () => cardRef.current?.contains(document.activeElement) ?? false;
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const remaining = useRef(durationMs);
@@ -86,6 +112,8 @@ function ToastMessage({ toast, onDismiss, durationMs, className }: ToastMessageP
 
   return (
     <div
+      ref={cardRef}
+      data-toast=""
       onPointerEnter={() => setHovered(true)}
       onPointerLeave={() => setHovered(false)}
       onFocus={() => setFocused(true)}
@@ -112,7 +140,7 @@ function ToastMessage({ toast, onDismiss, durationMs, className }: ToastMessageP
           aria-label={toast.undoLabel ?? 'Undo'}
           onClick={() => {
             const callback = toast.onUndo;
-            onDismiss(toast.id);
+            onDismissFromToast(toast.id, hasFocus());
             callback?.();
           }}
           className="shrink-0 rounded-md bg-accent px-2.5 py-1 text-xs font-semibold text-white transition-colors hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft"
@@ -123,7 +151,7 @@ function ToastMessage({ toast, onDismiss, durationMs, className }: ToastMessageP
       <button
         type="button"
         aria-label={`Dismiss ${toast.message}`}
-        onClick={() => onDismiss(toast.id)}
+        onClick={() => onDismissFromToast(toast.id, hasFocus())}
         className="shrink-0 rounded-md p-1 text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft"
       >
         <X className="h-4 w-4" aria-hidden="true" />

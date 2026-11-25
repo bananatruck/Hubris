@@ -132,3 +132,50 @@ it('expires an older toast on its own timer while a newer toast stays', () => {
   expect(onDismiss).toHaveBeenCalledWith('a');
   expect(onDismiss).not.toHaveBeenCalledWith('b');
 });
+
+describe('Toast focus on dismissal', () => {
+  function Harness({ initial, fallback }: { initial: ToastData[]; fallback?: () => HTMLElement | null }) {
+    const [toasts, setToasts] = useState(initial);
+    return <>
+      <button type="button">Outside</button>
+      <div tabIndex={-1} data-testid="fallback">Panel</div>
+      <Toast
+        toasts={toasts}
+        onDismiss={(id) => setToasts((current) => current.filter((toast) => toast.id !== id))}
+        fallbackFocus={fallback}
+      />
+    </>;
+  }
+  const toasts = (): ToastData[] => [
+    { id: 'a', message: 'Alpha logged', undoLabel: 'Undo Alpha', onUndo: vi.fn() },
+    { id: 'b', message: 'Beta logged', undoLabel: 'Undo Beta', onUndo: vi.fn() },
+  ];
+
+  it('moves focus to the toast that takes the place of a dismissed one, or the one before it', () => {
+    render(<Harness initial={[...toasts(), { id: 'c', message: 'Gamma logged', undoLabel: 'Undo Gamma', onUndo: vi.fn() }]} />);
+    const dismissBeta = screen.getByRole('button', { name: 'Dismiss Beta logged' });
+    dismissBeta.focus();
+    fireEvent.click(dismissBeta);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Undo Gamma' }));
+
+    const undoGamma = screen.getByRole('button', { name: 'Undo Gamma' });
+    fireEvent.click(undoGamma);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Undo Alpha' }));
+  });
+
+  it('moves focus to the fallback target when the last toast goes', () => {
+    render(<Harness initial={[toasts()[0]]} fallback={() => screen.getByTestId('fallback')} />);
+    const undo = screen.getByRole('button', { name: 'Undo Alpha' });
+    undo.focus();
+    fireEvent.click(undo);
+    expect(document.activeElement).toBe(screen.getByTestId('fallback'));
+  });
+
+  it('leaves focus alone when it was outside the dismissed toast', () => {
+    render(<Harness initial={toasts()} fallback={() => screen.getByTestId('fallback')} />);
+    const outside = screen.getByRole('button', { name: 'Outside' });
+    outside.focus();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss Beta logged' }));
+    expect(document.activeElement).toBe(outside);
+  });
+});
