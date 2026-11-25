@@ -47,22 +47,34 @@ export function Toast({
     target?.focus();
   }, [toasts, fallbackFocus]);
 
-  // Each notification is announced once, when it arrives. A keyed node per notification makes a repeated
-  // message a new update, and dismissing the newest toast leaves the region alone instead of re-reading an older one.
+  // Live region rule: the toasts that arrived in an update (ids not in the previous update) are
+  // announced once, in arrival order, one line each. An update without arrivals leaves the region
+  // alone, so a dismissal re-reads nothing; an empty stack empties it. Each batch is a new keyed node,
+  // so a repeated message is announced again.
   const [knownIds, setKnownIds] = useState<readonly string[]>([]);
-  const [announcement, setAnnouncement] = useState<{ id: string; text: string } | null>(null);
+  const [announcement, setAnnouncement] = useState<{ key: string; lines: string[] } | null>(null);
   const ids = toasts.map((toast) => toast.id);
   if (ids.join('\n') !== knownIds.join('\n')) {
-    const arrived = toasts.filter((toast) => !knownIds.includes(toast.id)).at(-1);
+    const arrived = toasts.filter((toast) => !knownIds.includes(toast.id));
     setKnownIds(ids);
-    if (arrived) setAnnouncement({ id: arrived.id, text: [arrived.message, arrived.errorMessage].filter(Boolean).join(' ') });
-    else if (toasts.length === 0) setAnnouncement(null);
+    if (arrived.length) {
+      setAnnouncement({
+        key: arrived.map((toast) => toast.id).join('\n'),
+        lines: arrived.map((toast) => [toast.message, toast.errorMessage].filter(Boolean).join(' ')),
+      });
+    } else if (toasts.length === 0) {
+      setAnnouncement(null);
+    }
   }
 
   return (
     <>
       <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-        {announcement && <span key={announcement.id}>{announcement.text}</span>}
+        {announcement && (
+          <div key={announcement.key}>
+            {announcement.lines.map((line, index) => <p key={index}>{line}</p>)}
+          </div>
+        )}
       </div>
       <div ref={stackRef} className="fixed bottom-16 left-3 right-3 z-50 mx-auto flex max-h-[calc(100dvh-5rem)] max-w-[356px] flex-col gap-2 overflow-y-auto">
         {toasts.map((toast) => (

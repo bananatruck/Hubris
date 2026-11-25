@@ -20,34 +20,42 @@ describe('Toast live region', () => {
   });
 });
 
+/**
+ * Live region rule: the status region announces the toasts that arrived in an update (ids it has not
+ * seen in the previous update), once, in arrival order, each as its own line. An update with no
+ * arrivals (a dismissal or expiry) leaves the region unchanged, so nothing is re-read. When the stack
+ * empties, the region empties. Every batch of arrivals is a new node, so a repeated message is a new
+ * announcement.
+ */
 describe('Toast announcements', () => {
-  const alpha = (id: string): ToastData => ({ id, message: 'Alpha logged', undoLabel: 'Undo Alpha', onUndo: vi.fn() });
-
-  it('announces a repeated message again as a new update', () => {
-    const { rerender } = render(<Toast toasts={[alpha('a1')]} onDismiss={vi.fn()} />);
+  const t = (id: string, message: string): ToastData => ({ id, message });
+  const lines = (region: HTMLElement) => [...region.querySelectorAll('p')].map((line) => line.textContent);
+  it.each<[string, ToastData[], ToastData[], string[] | 'unchanged']>([
+    ['two arriving together are both announced in order', [], [t('a', 'Alpha'), t('b', 'Beta')], ['Alpha', 'Beta']],
+    ['only the new ones of a larger stack', [t('a', 'Alpha')], [t('a', 'Alpha'), t('b', 'Beta'), t('c', 'Gamma')], ['Beta', 'Gamma']],
+    ['a repeated message arrives as a new announcement', [t('a', 'Alpha')], [t('a', 'Alpha'), t('a2', 'Alpha')], ['Alpha']],
+    ['one leaving while another arrives announces the arrival', [t('a', 'Alpha')], [t('c', 'Gamma')], ['Gamma']],
+    ['dismissing the newest re-reads nothing', [t('a', 'Alpha'), t('b', 'Beta')], [t('a', 'Alpha')], 'unchanged'],
+    ['an emptied stack empties the region', [t('a', 'Alpha')], [], []],
+  ])('%s', (_name, before, after, expected) => {
+    const { rerender } = render(<Toast toasts={before} onDismiss={vi.fn()} />);
     const region = screen.getByRole('status');
-    const first = region.firstElementChild;
-    expect(region.textContent).toBe('Alpha logged');
-
-    rerender(<Toast toasts={[alpha('a1'), alpha('a2')]} onDismiss={vi.fn()} />);
+    const previous = region.firstElementChild;
+    const previousLines = lines(region);
+    rerender(<Toast toasts={after} onDismiss={vi.fn()} />);
     expect(screen.getByRole('status')).toBe(region);
-    expect(region.textContent).toBe('Alpha logged');
-    expect(region.firstElementChild).not.toBe(first);
+    if (expected === 'unchanged') {
+      expect(region.firstElementChild).toBe(previous);
+      expect(lines(region)).toEqual(previousLines);
+    } else {
+      expect(lines(region)).toEqual(expected);
+      if (expected.length) expect(region.firstElementChild).not.toBe(previous);
+    }
   });
 
-  it('does not announce an older message again when the newest toast is dismissed', () => {
-    const beta: ToastData = { id: 'b', message: 'Beta logged' };
-    const { rerender } = render(<Toast toasts={[alpha('a1'), beta]} onDismiss={vi.fn()} />);
-    const region = screen.getByRole('status');
-    const announcement = region.firstElementChild;
-    expect(region.textContent).toBe('Beta logged');
-
-    rerender(<Toast toasts={[alpha('a1')]} onDismiss={vi.fn()} />);
-    expect(region.firstElementChild).toBe(announcement);
-    expect(region.textContent).toBe('Beta logged');
-
-    rerender(<Toast toasts={[]} onDismiss={vi.fn()} />);
-    expect(region.textContent).toBe('');
+  it('announces an error message with its toast message', () => {
+    render(<Toast toasts={[{ id: 'e', message: 'Could not save.', errorMessage: 'Storage is full.' }]} onDismiss={vi.fn()} />);
+    expect(lines(screen.getByRole('status'))).toEqual(['Could not save. Storage is full.']);
   });
 });
 
