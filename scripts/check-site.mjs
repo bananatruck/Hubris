@@ -2,6 +2,8 @@
 // 1. No horizontal page overflow at phone and desktop widths.
 // 2. Every small text node that assistive technology can reach has at least 4.5:1 contrast
 //    (WCAG 2.1, 1.4.3). Text inside role="img" or aria-hidden content is part of a picture and is skipped.
+// 3. Content marked as a picture (role="img" or aria-hidden) holds nothing focusable and no landmark,
+//    since its children are hidden from assistive technology but a focus stop would remain.
 // Run: node scripts/check-site.mjs
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -17,6 +19,10 @@ try {
     const tab = await browser.newPage({ viewport: { width, height: 800 } });
     await tab.goto(page);
     const scrollWidth = await tab.evaluate(() => document.documentElement.scrollWidth);
+    const hiddenInteractive = await tab.evaluate(() => [...document.querySelectorAll(
+      ':is([role="img"], [aria-hidden="true"]) :is(a[href], button, input, select, textarea, [tabindex], nav, main, aside, [role])',
+    )].map((element) => element.outerHTML.slice(0, 80)));
+    failures.push(...hiddenInteractive.map((html) => `inside a picture: ${html}`));
     if (scrollWidth > width) failures.push(`overflow at ${width}px: page is ${scrollWidth}px wide`);
     if (width === 1280 || width === 320) {
       const low = await tab.evaluate(() => {
