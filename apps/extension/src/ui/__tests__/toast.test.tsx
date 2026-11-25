@@ -141,8 +141,13 @@ it('expires an older toast on its own timer while a newer toast stays', () => {
   expect(onDismiss).not.toHaveBeenCalledWith('b');
 });
 
+/**
+ * Focus rule: when Undo or Dismiss removes the toast that holds focus, focus moves to the toast now in
+ * its place (the next newer one), else the one before it, else the caller's fallback. Focus outside the
+ * dismissed toast is never moved.
+ */
 describe('Toast focus on dismissal', () => {
-  function Harness({ initial, fallback }: { initial: ToastData[]; fallback?: () => HTMLElement | null }) {
+  function Harness({ initial }: { initial: ToastData[] }) {
     const [toasts, setToasts] = useState(initial);
     return <>
       <button type="button">Outside</button>
@@ -150,40 +155,23 @@ describe('Toast focus on dismissal', () => {
       <Toast
         toasts={toasts}
         onDismiss={(id) => setToasts((current) => current.filter((toast) => toast.id !== id))}
-        fallbackFocus={fallback}
+        fallbackFocus={() => screen.getByTestId('fallback')}
       />
     </>;
   }
-  const toasts = (): ToastData[] => [
-    { id: 'a', message: 'Alpha logged', undoLabel: 'Undo Alpha', onUndo: vi.fn() },
-    { id: 'b', message: 'Beta logged', undoLabel: 'Undo Beta', onUndo: vi.fn() },
-  ];
+  const make = (...names: string[]): ToastData[] =>
+    names.map((name) => ({ id: name, message: `${name} logged`, undoLabel: `Undo ${name}`, onUndo: vi.fn() }));
 
-  it('moves focus to the toast that takes the place of a dismissed one, or the one before it', () => {
-    render(<Harness initial={[...toasts(), { id: 'c', message: 'Gamma logged', undoLabel: 'Undo Gamma', onUndo: vi.fn() }]} />);
-    const dismissBeta = screen.getByRole('button', { name: 'Dismiss Beta logged' });
-    dismissBeta.focus();
-    fireEvent.click(dismissBeta);
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Undo Gamma' }));
-
-    const undoGamma = screen.getByRole('button', { name: 'Undo Gamma' });
-    fireEvent.click(undoGamma);
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Undo Alpha' }));
-  });
-
-  it('moves focus to the fallback target when the last toast goes', () => {
-    render(<Harness initial={[toasts()[0]]} fallback={() => screen.getByTestId('fallback')} />);
-    const undo = screen.getByRole('button', { name: 'Undo Alpha' });
-    undo.focus();
-    fireEvent.click(undo);
-    expect(document.activeElement).toBe(screen.getByTestId('fallback'));
-  });
-
-  it('leaves focus alone when it was outside the dismissed toast', () => {
-    render(<Harness initial={toasts()} fallback={() => screen.getByTestId('fallback')} />);
-    const outside = screen.getByRole('button', { name: 'Outside' });
-    outside.focus();
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss Beta logged' }));
-    expect(document.activeElement).toBe(outside);
+  it.each<[string, string[], string, string | null, () => HTMLElement]>([
+    ['the middle one moves focus to the next newer', ['Alpha', 'Beta', 'Gamma'], 'Dismiss Beta logged', 'Dismiss Beta logged', () => screen.getByRole('button', { name: 'Undo Gamma' })],
+    ['the newest moves focus to the one before it', ['Alpha', 'Beta', 'Gamma'], 'Undo Gamma', 'Undo Gamma', () => screen.getByRole('button', { name: 'Undo Beta' })],
+    ['the oldest moves focus to the next newer', ['Alpha', 'Beta'], 'Undo Alpha', 'Undo Alpha', () => screen.getByRole('button', { name: 'Undo Beta' })],
+    ['the last one moves focus to the fallback', ['Alpha'], 'Undo Alpha', 'Undo Alpha', () => screen.getByTestId('fallback')],
+    ['any one leaves focus outside the stack alone', ['Alpha', 'Beta'], 'Dismiss Beta logged', 'Outside', () => screen.getByRole('button', { name: 'Outside' })],
+  ])('dismissing %s', (_name, names, press, focused, expected) => {
+    render(<Harness initial={make(...names)} />);
+    if (focused) screen.getByRole('button', { name: focused }).focus();
+    fireEvent.click(screen.getByRole('button', { name: press }));
+    expect(document.activeElement).toBe(expected());
   });
 });

@@ -527,3 +527,23 @@ it.each(['Today', 'Settings'])('does not close a newer add dialog on %s when an 
   expect(screen.getByRole('dialog', { name: 'Add activity' })).toBeTruthy();
   expect(screen.getByLabelText('Activity name')).toHaveValue('Second draft');
 });
+
+/**
+ * Focus rule after a keyboard user dismisses the last toast: the active tab panel when the tabs
+ * show, otherwise the main region of the current view (onboarding, loading or error).
+ */
+it.each<[string, Partial<HubrisState>, () => HTMLElement]>([
+  ['tabs', {}, () => screen.getByRole('tabpanel', { name: 'Today' })],
+  ['onboarding', { onboardingComplete: false }, () => screen.getByRole('main')],
+  ['loading', { status: 'loading' }, () => screen.getByRole('main')],
+  ['error', { status: 'error', error: 'Could not read local data.' }, () => screen.getByRole('main')],
+])('moves focus to the %s view when its last toast is dismissed', async (_view, overrides, target) => {
+  const open = vi.fn(() => Promise.reject(new Error('Panel unavailable.')));
+  vi.stubGlobal('chrome', { windows: { getCurrent: (callback: (win: { id: number }) => void) => callback({ id: 7 }) }, sidePanel: { open } });
+  setup(overrides);
+  fireEvent.click(screen.getByRole('button', { name: 'Open side panel' }));
+  const dismiss = await screen.findByRole('button', { name: 'Dismiss Panel unavailable.' });
+  dismiss.focus();
+  fireEvent.click(dismiss);
+  expect(document.activeElement).toBe(target());
+});
