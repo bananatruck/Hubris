@@ -25,7 +25,7 @@ export function createSearchController<C, T>(
         onChange(next);
     };
     const disown = () => {
-        clearTimeout(timer);
+        if (timer !== undefined) clearTimeout(timer);
         timer = undefined;
         generation += 1;
     };
