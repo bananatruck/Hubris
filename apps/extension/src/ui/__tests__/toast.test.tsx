@@ -25,7 +25,8 @@ describe('Toast live region', () => {
  * seen in the previous update), once, in arrival order, each as its own line. An update with no
  * arrivals (a dismissal or expiry) leaves the region unchanged, so nothing is re-read. When the stack
  * empties, the region empties. Every batch of arrivals is a new node, so a repeated message is a new
- * announcement.
+ * announcement. The status region is the only live source: nothing in the visible stack has live
+ * semantics, so each message, error detail included, is announced once, by one region.
  */
 describe('Toast announcements', () => {
   const t = (id: string, message: string): ToastData => ({ id, message });
@@ -53,9 +54,16 @@ describe('Toast announcements', () => {
     }
   });
 
-  it('announces an error message with its toast message', () => {
-    render(<Toast toasts={[{ id: 'e', message: 'Could not save.', errorMessage: 'Storage is full.' }]} onDismiss={vi.fn()} />);
-    expect(lines(screen.getByRole('status'))).toEqual(['Could not save. Storage is full.']);
+  it.each<[string, ToastData[]]>([
+    ['an info toast', [{ id: 'i', message: 'Alpha logged', undoLabel: 'Undo Alpha', onUndo: vi.fn() }]],
+    ['an error toast', [{ id: 'e', tone: 'error', message: 'Could not undo.' }]],
+    ['a toast with an error detail', [{ id: 'd', message: 'Could not save.', errorMessage: 'Storage is full.' }]],
+  ])('announces %s through the status region only', (_name, toasts) => {
+    const { container } = render(<Toast toasts={toasts} onDismiss={vi.fn()} />);
+    const live = container.querySelectorAll('[role="alert"], [role="status"], [role="log"], [aria-live]');
+    expect([...live]).toEqual([screen.getByRole('status')]);
+    const [toast] = toasts;
+    expect(lines(screen.getByRole('status'))).toEqual([[toast.message, toast.errorMessage].filter(Boolean).join(' ')]);
   });
 });
 

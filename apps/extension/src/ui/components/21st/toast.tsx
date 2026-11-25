@@ -50,7 +50,8 @@ export function Toast({
   // Live region rule: the toasts that arrived in an update (ids not in the previous update) are
   // announced once, in arrival order, one line each. An update without arrivals leaves the region
   // alone, so a dismissal re-reads nothing; an empty stack empties it. Each batch is a new keyed node,
-  // so a repeated message is announced again.
+  // so a repeated message is announced again. The status region is the only live source: nothing in the
+  // visible stack has live semantics, so each message, error detail included, is announced once.
   const [knownIds, setKnownIds] = useState<readonly string[]>([]);
   const [announcement, setAnnouncement] = useState<{ key: string; lines: string[] } | null>(null);
   const ids = toasts.map((toast) => toast.id);
@@ -141,7 +142,7 @@ function ToastMessage({ toast, onDismiss, onDismissFromToast, durationMs, classN
       <span className="min-w-0 font-medium">
         <span className="block">{toast.message}</span>
         {toast.errorMessage && (
-          <span role="alert" className="mt-0.5 block text-red-200">
+          <span className="mt-0.5 block text-red-200">
             {toast.errorMessage}
           </span>
         )}
