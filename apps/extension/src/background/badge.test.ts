@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { getBadgeState, getNextMondayTime } from './badge';
 import { addLog, createActivity, eraseAll } from '../storage/repository';
+import { exportData, importData } from '../storage/backup';
 
 afterEach(() => { vi.unstubAllGlobals(); });
 describe('getNextMondayTime', () => {
@@ -92,6 +93,40 @@ it('registers worker events and updates the real report through Chrome action AP
     expect(chromeMock.runtime.onStartup.addListener).toHaveBeenCalledOnce();
     expect(chromeMock.runtime.onMessage.addListener).toHaveBeenCalledOnce();
     expect(chromeMock.alarms.onAlarm.addListener).toHaveBeenCalledOnce();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('shows the badge for an activity that is active now and archived only from a later version', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(2026, 10, 18, 12));
+  try {
+    await eraseAll();
+    const activity = await createActivity({ name: 'Practice', category: 'career', timesPerWeek: 1, importance: 'high' });
+    await addLog(activity.id);
+    const data = await exportData();
+    const [current] = data.activities;
+    const firstVersion = current.versions?.[0];
+    if (!firstVersion) throw new Error('Expected a version');
+    await importData({
+      ...data,
+      activities: [{
+        ...current,
+        archived: true,
+        versions: [firstVersion, { ...firstVersion, from: new Date(2026, 11, 1).toISOString(), archived: true }],
+      }],
+    }, 'replace');
+    const chromeMock = {
+      action: { setBadgeText: vi.fn().mockResolvedValue(undefined), setBadgeBackgroundColor: vi.fn().mockResolvedValue(undefined), setTitle: vi.fn().mockResolvedValue(undefined) },
+      alarms: { get: vi.fn().mockResolvedValue(undefined), create: vi.fn().mockResolvedValue(undefined), onAlarm: { addListener: vi.fn() } },
+      runtime: { onInstalled: { addListener: vi.fn() }, onStartup: { addListener: vi.fn() }, onMessage: { addListener: vi.fn() } },
+    };
+    vi.stubGlobal('chrome', chromeMock);
+    const { refreshBadge } = await import('./index');
+    chromeMock.action.setBadgeText.mockClear();
+    await refreshBadge();
+    expect(chromeMock.action.setBadgeText).toHaveBeenLastCalledWith({ text: '36' });
   } finally {
     vi.useRealTimers();
   }

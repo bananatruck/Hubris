@@ -1,4 +1,4 @@
-import { computeWeeklyReport } from '@hubris/core';
+import { activeReportCategories, computeWeeklyReport } from '@hubris/core';
 import { readSnapshot } from '../storage/repository';
 import { isDataChangedMessage } from '../shared/messages';
 import { getBadgeState, getNextMondayTime } from './badge';
@@ -9,7 +9,7 @@ const MONDAY_ALARM_NAME = 'hubris/refresh-badge-monday';
 export async function refreshBadge() {
   const { activities, logs } = await readSnapshot();
   const report = computeWeeklyReport(activities, logs, new Date());
-  const badge = getBadgeState(report.overall, activities.some((activity) => !activity.archived));
+  const badge = getBadgeState(report.overall, activeReportCategories(report).size > 0);
   await Promise.all([
     chrome.action.setBadgeText({ text: badge.text }),
     chrome.action.setBadgeBackgroundColor({ color: badge.color }),

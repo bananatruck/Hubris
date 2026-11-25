@@ -121,6 +121,16 @@ function compareRows(a: { importance: Importance; name: string }, b: { importanc
         || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
 }
 
+/**
+ * Activities scored in a report, with the category of the version in effect.
+ * Use this, not an activity's top-level fields, to decide what is active now: an imported history can
+ * keep an active current version while a later version archives it or moves it to another category.
+ */
+export function activeReportCategories(report: WeeklyReport): Map<string, ScoredCategory> {
+    return new Map(SCORED_CATEGORIES.flatMap((category) =>
+        report.categories[category].activities.map((row) => [row.activityId, category] as const)));
+}
+
 export function computeWeeklyReport(
     activities: TrackedActivity[],
     logs: ActivityLog[],

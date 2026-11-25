@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { computeWeeklyReport, computeWeeklyTrend, generateLogHeatmap, getWeekBounds } from '@hubris/core';
+import { computeWeeklyReport, computeWeeklyTrend, generateLogHeatmap, generateWeeklySuggestions, getWeekBounds } from '@hubris/core';
 import { HubrisContext, type HubrisState } from '../../state/useHubris';
 import { ValidationError } from '../../storage/validation';
 import { App } from '../App';
@@ -478,4 +478,20 @@ it('does not close a reopened edit dialog for the same activity when an older sa
 
   expect(screen.getByRole('dialog', { name: 'Edit activity' })).toBeTruthy();
   expect(screen.getByLabelText('Activity name')).toHaveValue('Practice draft');
+});
+
+it('suggests an activity that is active now even when a later version archives it', () => {
+  const versions = [
+    { from: '2026-11-01T00:00:00.000Z', category: 'health' as const, timesPerWeek: 7, importance: 'high' as const, archived: false },
+    { from: '2026-12-01T00:00:00.000Z', category: 'health' as const, timesPerWeek: 7, importance: 'high' as const, archived: true },
+  ];
+  const meditation = { ...activity, id: 'm', name: 'Meditation', category: 'health' as const, timesPerWeek: 7, archived: true, versions };
+  setup({
+    activities: [meditation],
+    logs: [],
+    report: computeWeeklyReport([meditation], [], now),
+    suggestions: generateWeeklySuggestions([meditation], [], now),
+  });
+  const region = screen.getByRole('region', { name: 'Worth doing next' });
+  expect(within(region).getByRole('button', { name: 'Log Meditation' })).toBeTruthy();
 });
