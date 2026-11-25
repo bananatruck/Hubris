@@ -82,5 +82,5 @@ if (failures.length) {
   console.error(`FAIL ${failures.length} landing page problem(s):\n${[...new Set(failures)].join('\n')}`);
   process.exitCode = 1;
 } else {
-  console.log('PASS landing page: no horizontal overflow, small text at least 4.5:1');
+  console.log('PASS landing page: no horizontal overflow, small text at least 4.5:1, nothing focusable in pictures');
 }
