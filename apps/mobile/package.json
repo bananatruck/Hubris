@@ -9,6 +9,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "build": "echo 'No build step for Expo'",
+    "test": "node --test src/services/entertainment.test.ts",
     "type-check": "tsc --noEmit",
     "lint": "eslint ."
   },

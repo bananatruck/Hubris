@@ -42,12 +42,14 @@ export default function EntertainmentScreen() {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<EntertainmentItem[]>([]);
     const [isSearching, setIsSearching] = useState(false);
+    const [searchError, setSearchError] = useState<string | null>(null);
 
     // Filter activities by sub-category
     const filteredActivities = activities.filter(a => a.sub_category === activeTab);
 
     const handleSearch = async (query: string) => {
         setSearchQuery(query);
+        setSearchError(null);
         if (!query.trim()) {
             setSearchResults([]);
             return;
@@ -65,7 +67,8 @@ export default function EntertainmentScreen() {
             }
             setSearchResults(results);
         } catch (error) {
-            console.error('Search error:', error);
+            setSearchResults([]);
+            setSearchError(error instanceof Error ? error.message : 'Search failed. Try again.');
         } finally {
             setIsSearching(false);
         }
@@ -102,6 +105,7 @@ export default function EntertainmentScreen() {
                             setActiveTab(tab.id);
                             setSearchQuery('');
                             setSearchResults([]);
+                            setSearchError(null);
                         }}
                     >
                         <Text style={[styles.tabText, activeTab === tab.id && styles.activeTabText]}>
@@ -128,6 +132,12 @@ export default function EntertainmentScreen() {
                         <ActivityIndicator style={styles.searchLoader} color={colors.primary.main} />
                     )}
                 </View>
+
+                {searchError && (
+                    <Text style={styles.searchError} accessibilityRole="alert">
+                        {searchError}
+                    </Text>
+                )}
 
                 {/* Search Results */}
                 {searchResults.length > 0 && (
@@ -299,6 +309,11 @@ const styles = StyleSheet.create({
         position: 'absolute',
         right: spacing.md,
         top: spacing.md,
+    },
+    searchError: {
+        color: colors.status.error,
+        fontSize: 14,
+        marginBottom: spacing.md,
     },
     section: {
         marginBottom: spacing.lg,
